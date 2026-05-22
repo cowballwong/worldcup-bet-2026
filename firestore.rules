@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: is the requester an admin?
+    function isAdmin() {
+      return request.auth != null &&
+             request.auth.token.email in
+               get(/databases/$(database)/documents/config/admin_emails).data.emails;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── config ────────────────────────────────────────────────
+    // Everyone signed in can READ config (so the client can check
+    // invite_only / admin_emails). Only admins can write.
+    match /config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── users ─────────────────────────────────────────────────
+    // Each user doc is keyed by uid.
+    // - Read: any signed-in player (so leaderboard works).
+    // - Create: the user themselves, on first sign-in, with starting
+    //   balance only. They cannot set their own balance to a custom value.
+    // - Update: only admins (to adjust balances) or the server-side
+    //   settlement path. Players CANNOT edit their own balance directly.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSelf(uid)
+                    && request.resource.data.balance == 1000
+                    && request.resource.data.email == request.auth.token.email;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── matches ───────────────────────────────────────────────
+    // Read: any signed-in player. Write: admins only.
+    match /matches/{matchId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── bets ──────────────────────────────────────────────────
+    // Read own bets, plus admins can read all.
+    // Create: signed-in user placing a bet on themselves, on a match
+    // that hasn't kicked off, with valid stake.
+    // Update / delete: admins only (e.g. settlement, void).
+    match /bets/{betId} {
+      allow read: if isSignedIn() && (
+                    resource.data.userId == request.auth.uid || isAdmin()
+                  );
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.stake is number
+                    && request.resource.data.stake >= 10
+                    && request.resource.data.stake <= 200
+                    && request.resource.data.status == 'open';
+      allow update, delete: if isAdmin();
+    }
+  }
+}

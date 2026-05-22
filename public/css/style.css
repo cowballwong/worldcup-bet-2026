@@ -1,0 +1,101 @@
+/* Minor polish on top of Tailwind */
+
+#bet-modal.flex,
+#match-modal.flex { display: flex; }
+
+.match-card {
+  display: block;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color .15s, transform .1s;
+  cursor: pointer;
+}
+.match-card:hover {
+  border-color: #0d9488;
+  transform: translateY(-1px);
+}
+.match-card.is-closed { opacity: .65; cursor: default; }
+.match-card.is-closed:hover { transform: none; border-color: #e2e8f0; }
+.match-card.is-settled {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.bet-selection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .1s, border-color .1s;
+}
+.bet-selection-row:hover { background: #f8fafc; }
+.bet-selection-row.is-selected {
+  border-color: #0d9488;
+  background: #f0fdfa;
+}
+.bet-selection-row .odds-pill {
+  font-weight: 600;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.bet-selection-row.is-selected .odds-pill {
+  background: #0d9488;
+  color: white;
+}
+
+.leaderboard-row {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.leaderboard-row .rank-medal {
+  font-size: 18px;
+  width: 30px;
+  text-align: center;
+}
+.leaderboard-row.is-me {
+  background: #f0fdfa;
+  border-color: #0d9488;
+}
+
+.bet-history-row {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bet-history-row.is-won { background: #f0fdf4; border-color: #86efac; }
+.bet-history-row.is-lost { background: #fef2f2; border-color: #fecaca; }
+
+.status-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.status-badge.scheduled { background: #e0f2fe; color: #075985; }
+.status-badge.live      { background: #fee2e2; color: #991b1b; animation: pulse 1.5s infinite; }
+.status-badge.settled   { background: #dcfce7; color: #166534; }
+.status-badge.open      { background: #e0f2fe; color: #075985; }
+.status-badge.won       { background: #dcfce7; color: #166534; }
+.status-badge.lost      { background: #fee2e2; color: #991b1b; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+
+#toast.show { display: block; }

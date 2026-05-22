@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin · World Cup 2026 Bet</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<header class="bg-rose-700 text-white shadow-sm sticky top-0 z-10">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+    <span class="text-2xl">🛠️</span>
+    <div class="flex-1">
+      <h1 class="font-bold text-lg leading-tight">Admin · World Cup 2026 Bet</h1>
+      <p class="text-xs text-rose-200">Edit fixtures · enter scores · settle bets</p>
+    </div>
+    <a href="index.html" class="text-rose-200 hover:text-white text-sm">← Player view</a>
+    <button id="signout-btn" class="text-rose-200 hover:text-white text-sm">Sign out</button>
+  </div>
+</header>
+
+<section id="signin-gate" class="max-w-md mx-auto mt-20 p-6 text-center hidden">
+  <p class="text-slate-600">Sign in with an admin account to continue.</p>
+  <button id="signin-btn" class="mt-4 bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded">Sign in</button>
+</section>
+
+<section id="not-admin" class="max-w-md mx-auto mt-20 p-6 text-center hidden">
+  <p class="text-rose-600 font-semibold">⚠️ Your account is not on the admin allowlist.</p>
+  <p class="text-slate-500 mt-2 text-sm">Sign in with the admin Gmail, or ask Anzon to add you.</p>
+  <a href="index.html" class="text-emerald-700 hover:underline text-sm mt-3 inline-block">← Back to player view</a>
+</section>
+
+<main id="admin-view" class="max-w-5xl mx-auto px-4 py-6 hidden">
+
+  <div class="flex border-b border-slate-200 mb-4">
+    <button class="tab-btn px-4 py-2 font-medium text-rose-700 border-b-2 border-rose-700" data-tab="fixtures">⚽️ Fixtures</button>
+    <button class="tab-btn px-4 py-2 font-medium text-slate-500 border-b-2 border-transparent" data-tab="users">👥 Users</button>
+    <button class="tab-btn px-4 py-2 font-medium text-slate-500 border-b-2 border-transparent" data-tab="bulk-import">📥 Import</button>
+  </div>
+
+  <section id="tab-fixtures" class="tab-panel">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-semibold">All matches · 賽程</h2>
+      <button id="add-match-btn" class="text-sm bg-emerald-600 text-white px-3 py-1 rounded">+ Add match</button>
+    </div>
+    <div id="admin-match-list" class="space-y-2">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <section id="tab-users" class="tab-panel hidden">
+    <h2 class="font-semibold mb-3">Registered players · 玩家</h2>
+    <div id="user-list" class="space-y-2">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <section id="tab-bulk-import" class="tab-panel hidden">
+    <h2 class="font-semibold mb-3">Bulk import fixtures · 一次過導入賽程</h2>
+    <p class="text-sm text-slate-600 mb-3">Paste the contents of <code>public/data/fixtures.json</code> (or any valid match list) below and click Import. Existing match IDs will be overwritten.</p>
+    <textarea id="bulk-import-json" class="w-full h-64 border border-slate-300 rounded p-3 font-mono text-xs"></textarea>
+    <button id="bulk-import-btn" class="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded">Import</button>
+    <p id="bulk-import-status" class="mt-2 text-sm"></p>
+  </section>
+
+</main>
+
+<!-- Match edit modal -->
+<div id="match-modal" class="fixed inset-0 bg-black/50 z-20 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <header class="px-5 py-3 border-b border-slate-200 sticky top-0 bg-white flex items-center justify-between">
+      <h3 id="match-modal-title" class="font-semibold">Edit match</h3>
+      <button id="match-modal-close" class="text-slate-400 hover:text-slate-700 text-xl px-1">×</button>
+    </header>
+    <div class="p-5 space-y-3 text-sm">
+      <input type="hidden" id="m-id">
+      <div class="grid grid-cols-2 gap-2">
+        <label class="text-xs text-slate-500">Group<input id="m-group" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+        <label class="text-xs text-slate-500">Stage<input id="m-stage" class="w-full border rounded px-2 py-1 mt-1 text-sm" placeholder="group / r16 / qf / sf / final"></label>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="text-xs text-slate-500">Home team<input id="m-home-team" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+        <label class="text-xs text-slate-500">Home flag<input id="m-home-flag" class="w-full border rounded px-2 py-1 mt-1 text-sm" placeholder="🇲🇽"></label>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="text-xs text-slate-500">Away team<input id="m-away-team" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+        <label class="text-xs text-slate-500">Away flag<input id="m-away-flag" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+      </div>
+      <label class="text-xs text-slate-500 block">Kickoff (local-ISO with offset)<input id="m-kickoff" class="w-full border rounded px-2 py-1 mt-1 text-sm" placeholder="2026-06-11T20:00:00-05:00"></label>
+      <label class="text-xs text-slate-500 block">Venue<input id="m-venue" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+      <div class="border-t pt-3 mt-3">
+        <p class="text-xs text-slate-500 font-medium">Odds (decimal)</p>
+        <div class="grid grid-cols-3 gap-2 mt-1">
+          <label class="text-xs">Home<input id="m-odds-home" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">Draw<input id="m-odds-draw" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">Away<input id="m-odds-away" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">Over 2.5<input id="m-odds-over" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">Under 2.5<input id="m-odds-under" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">BTTS Yes<input id="m-odds-btts-yes" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">BTTS No<input id="m-odds-btts-no" type="number" step="0.01" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+        </div>
+      </div>
+      <div class="border-t pt-3 mt-3">
+        <p class="text-xs text-slate-500 font-medium">Final score (leave blank if not yet played)</p>
+        <div class="grid grid-cols-4 gap-2 mt-1 items-end">
+          <label class="text-xs">HT home<input id="m-ht-home" type="number" min="0" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">HT away<input id="m-ht-away" type="number" min="0" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">FT home<input id="m-ft-home" type="number" min="0" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+          <label class="text-xs">FT away<input id="m-ft-away" type="number" min="0" class="w-full border rounded px-2 py-1 mt-1 text-sm"></label>
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button id="match-save" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded">Save</button>
+        <button id="match-settle" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded">Save & Settle bets</button>
+        <button id="match-delete" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-2 rounded">Delete</button>
+      </div>
+      <p id="match-status" class="text-sm"></p>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm shadow-lg hidden z-30"></div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>

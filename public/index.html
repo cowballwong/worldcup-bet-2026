@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>World Cup 2026 · Friends Bet 世界盃估波</title>
+<meta name="description" content="A friends-only World Cup 2026 prediction game. No real money.">
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<header class="bg-emerald-700 text-white shadow-sm sticky top-0 z-10">
+  <div class="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+    <span class="text-2xl">⚽️</span>
+    <div class="flex-1 min-w-0">
+      <h1 class="font-bold text-lg leading-tight">World Cup 2026 Friends Bet</h1>
+      <p class="text-xs text-emerald-200">世界盃 2026 朋友估波</p>
+    </div>
+    <div id="user-box" class="hidden flex items-center gap-2 text-sm">
+      <span id="user-balance" class="font-semibold bg-emerald-800 px-2 py-1 rounded">— pts</span>
+      <button id="signout-btn" class="text-emerald-200 hover:text-white text-xs">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<!-- Sign-in view -->
+<section id="signin-view" class="max-w-md mx-auto mt-16 p-6 text-center hidden">
+  <div class="text-6xl mb-3">🏆</div>
+  <h2 class="text-2xl font-bold mb-2">Friends-only World Cup tipping game</h2>
+  <p class="text-slate-600 mb-6">Sign in with Gmail to play. You'll get <strong>1,000 points</strong> to bet across 64 matches. Top of the leaderboard wins bragging rights.</p>
+  <button id="signin-btn" class="bg-white border border-slate-300 hover:bg-slate-100 px-5 py-3 rounded-lg shadow-sm text-slate-800 font-medium inline-flex items-center gap-3">
+    <svg viewBox="0 0 24 24" width="20" height="20">
+      <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    <span>Sign in with Google</span>
+  </button>
+  <p class="mt-6 text-xs text-slate-500">For friends. No real money. Don't share the URL publicly.</p>
+</section>
+
+<!-- Main app -->
+<main id="app-view" class="max-w-4xl mx-auto px-4 py-6 hidden">
+
+  <!-- Tabs -->
+  <div class="flex border-b border-slate-200 mb-4">
+    <button class="tab-btn px-4 py-2 font-medium text-emerald-700 border-b-2 border-emerald-700" data-tab="matches">⚽️ Matches 賽程</button>
+    <button class="tab-btn px-4 py-2 font-medium text-slate-500 border-b-2 border-transparent" data-tab="leaderboard">🏆 Leaderboard 榜</button>
+    <button class="tab-btn px-4 py-2 font-medium text-slate-500 border-b-2 border-transparent" data-tab="mybets">🎟️ My Bets 我的注</button>
+  </div>
+
+  <!-- Matches tab -->
+  <section id="tab-matches" class="tab-panel">
+    <div class="flex items-baseline justify-between mb-2">
+      <h2 class="font-semibold">Upcoming matches</h2>
+      <span class="text-xs text-slate-500" id="match-count">—</span>
+    </div>
+    <div id="match-list" class="space-y-3">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <!-- Leaderboard tab -->
+  <section id="tab-leaderboard" class="tab-panel hidden">
+    <h2 class="font-semibold mb-2">Standings · 排行榜</h2>
+    <div id="leaderboard-list" class="space-y-2">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <!-- My Bets tab -->
+  <section id="tab-mybets" class="tab-panel hidden">
+    <h2 class="font-semibold mb-2">Your bets · 你嘅注單</h2>
+    <div id="mybets-list" class="space-y-2">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Bet modal -->
+<div id="bet-modal" class="fixed inset-0 bg-black/50 z-20 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <header class="px-5 py-3 border-b border-slate-200 sticky top-0 bg-white flex items-center justify-between">
+      <div>
+        <h3 id="bet-modal-title" class="font-semibold">Place a bet</h3>
+        <p id="bet-modal-subtitle" class="text-xs text-slate-500"></p>
+      </div>
+      <button id="bet-modal-close" class="text-slate-400 hover:text-slate-700 text-xl px-1">×</button>
+    </header>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-xs text-slate-500 font-medium">Market · 玩法</label>
+        <select id="bet-market" class="w-full mt-1 border border-slate-300 rounded px-3 py-2"></select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 font-medium">Selection · 揀</label>
+        <div id="bet-selections" class="mt-1 space-y-1"></div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 font-medium">Stake · 注額 (10-200 pts)</label>
+        <input id="bet-stake" type="number" min="10" max="200" step="10" value="10" class="w-full mt-1 border border-slate-300 rounded px-3 py-2">
+        <div class="flex gap-2 mt-2">
+          <button class="stake-chip px-2 py-1 text-xs bg-slate-100 rounded" data-stake="10">10</button>
+          <button class="stake-chip px-2 py-1 text-xs bg-slate-100 rounded" data-stake="25">25</button>
+          <button class="stake-chip px-2 py-1 text-xs bg-slate-100 rounded" data-stake="50">50</button>
+          <button class="stake-chip px-2 py-1 text-xs bg-slate-100 rounded" data-stake="100">100</button>
+          <button class="stake-chip px-2 py-1 text-xs bg-slate-100 rounded" data-stake="200">200</button>
+        </div>
+      </div>
+      <div class="bg-slate-50 rounded p-3 text-sm">
+        <div class="flex justify-between"><span class="text-slate-500">Stake</span><span id="bet-summary-stake">— pts</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Odds</span><span id="bet-summary-odds">—</span></div>
+        <div class="flex justify-between font-semibold mt-1 pt-1 border-t border-slate-200"><span>Potential win</span><span id="bet-summary-win">— pts</span></div>
+      </div>
+      <button id="bet-confirm" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-lg">
+        Confirm bet · 確認落注
+      </button>
+      <p id="bet-error" class="text-rose-600 text-sm hidden"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm shadow-lg hidden z-30"></div>
+
+<footer class="text-center text-xs text-slate-400 py-6">
+  For friends. No real money. ·
+  <a id="admin-link" href="admin.html" class="text-emerald-700 hidden">Admin</a>
+</footer>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
