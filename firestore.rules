@@ -55,11 +55,16 @@ service cloud.firestore {
     // that hasn't kicked off, with valid stake.
     // Update / delete: admins only (e.g. settlement, void).
     match /bets/{betId} {
+      // AI-LillyRose bets are visible to everyone (it's a public AI player).
       allow read: if isSignedIn() && (
-                    resource.data.userId == request.auth.uid || isAdmin()
+                    resource.data.userId == request.auth.uid
+                    || resource.data.userId == 'lillyrose-ai'
+                    || isAdmin()
                   );
+      // Players create bets only as themselves. Admin can create bets as any user
+      // (used to seed LillyRose's AI picks from the admin panel).
       allow create: if isSignedIn()
-                    && request.resource.data.userId == request.auth.uid
+                    && (request.resource.data.userId == request.auth.uid || isAdmin())
                     && request.resource.data.stake is number
                     && request.resource.data.stake >= 10
                     && request.resource.data.stake <= 200

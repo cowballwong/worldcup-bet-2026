@@ -8,6 +8,14 @@
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="css/style.css">
+<script>
+  // Apply persisted theme before first paint to avoid FOUC
+  (function() {
+    var t = localStorage.getItem('wc-theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
 
@@ -18,9 +26,12 @@
       <h1 class="font-bold text-lg leading-tight">World Cup 2026 Friends Bet</h1>
       <p class="text-xs text-emerald-200">世界盃 2026 朋友估波</p>
     </div>
-    <div id="user-box" class="hidden flex items-center gap-2 text-sm">
-      <span id="user-balance" class="font-semibold bg-emerald-800 px-2 py-1 rounded">— pts</span>
-      <button id="signout-btn" class="text-emerald-200 hover:text-white text-xs">Sign out</button>
+    <div class="flex items-center gap-2 text-sm">
+      <button id="theme-btn" class="text-emerald-200 hover:text-white text-lg" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+      <div id="user-box" class="hidden flex items-center gap-2">
+        <span id="user-balance" class="font-semibold bg-emerald-800 px-2 py-1 rounded">— pts</span>
+        <button id="signout-btn" class="text-emerald-200 hover:text-white text-xs">Sign out</button>
+      </div>
     </div>
   </div>
 </header>
@@ -62,6 +73,9 @@
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="mybets">
       <span class="block text-sm">🎟️ My Bets</span><span class="block text-xs opacity-70">我的注</span>
     </button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="ai">
+      <span class="block text-sm">🤖 LillyRose</span><span class="block text-xs opacity-70">AI 估</span>
+    </button>
   </div>
 
   <!-- Matches tab -->
@@ -97,6 +111,15 @@
   <section id="tab-leaderboard" class="tab-panel hidden">
     <h2 class="font-semibold leading-tight mb-2">Leaderboard<br><span class="text-xs text-slate-500 font-normal">排行榜</span></h2>
     <div id="leaderboard-list" class="space-y-2">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <!-- AI LillyRose picks -->
+  <section id="tab-ai" class="tab-panel hidden">
+    <h2 class="font-semibold leading-tight mb-1">🤖 LillyRose AI picks<br><span class="text-xs text-slate-500 font-normal">LillyRose 嘅估波</span></h2>
+    <p class="text-xs text-slate-500 mb-3">An AI player. Picks the 1X2 favourite ~12 hours before kickoff. Everyone can see her bets. She's part of the leaderboard.</p>
+    <div id="ai-bets-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
     </div>
   </section>

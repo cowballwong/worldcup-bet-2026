@@ -29,6 +29,21 @@ let unsubMyBets = null;
 // ── DOM ────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
+// ── Theme toggle ───────────────────────────────────────────────
+const themeBtn = $('theme-btn');
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('wc-theme', t);
+  if (themeBtn) themeBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+}
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    const cur = document.documentElement.dataset.theme || 'light';
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+  themeBtn.textContent = (document.documentElement.dataset.theme === 'dark') ? '☀️' : '🌙';
+}
+
 // ── Auth flow ──────────────────────────────────────────────────
 $('signin-btn')?.addEventListener('click', async () => {
   try {
@@ -88,7 +103,62 @@ onAuthStateChanged(auth, async (user) => {
   subscribeMatches();
   subscribeLeaderboard();
   subscribeMyBets();
+  subscribeAIBets();
 });
+
+// ── LillyRose AI bets subscription ─────────────────────────────
+const LILLYROSE_UID = 'lillyrose-ai';
+let unsubAIBets = null;
+
+function subscribeAIBets() {
+  if (unsubAIBets) unsubAIBets();
+  const q = query(collection(db, 'bets'), where('userId', '==', LILLYROSE_UID));
+  unsubAIBets = onSnapshot(q, snap => {
+    const bets = [];
+    snap.forEach(d => bets.push({ id: d.id, ...d.data() }));
+    bets.sort((a, b) => {
+      const ta = a.placedAt?.toMillis?.() ?? 0;
+      const tb = b.placedAt?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    renderAIBets(bets);
+  }, err => {
+    console.error('subscribeAIBets err:', err);
+    const el = document.getElementById('ai-bets-list');
+    if (el) el.innerHTML = `<p class="text-rose-600 text-sm">Failed: ${err.message}</p>`;
+  });
+}
+
+function renderAIBets(bets) {
+  const root = document.getElementById('ai-bets-list');
+  if (!root) return;
+  if (bets.length === 0) {
+    root.innerHTML = '<p class="text-slate-500 text-sm">LillyRose hasn\'t bet on anything yet. Admin: open the admin panel and press <b>Generate LillyRose picks</b> to seed her bets for upcoming matches.</p>';
+    return;
+  }
+  root.innerHTML = bets.map(b => {
+    const statusClass = b.status === 'won' ? 'is-won' : b.status === 'lost' ? 'is-lost' : '';
+    const payout = b.status === 'won' ? `+${b.payout ?? Math.round(b.stake * b.odds)}` :
+                   b.status === 'lost' ? `-${b.stake}` : `${b.stake}`;
+    const payoutCls = b.status === 'won' ? 'text-emerald-700' : b.status === 'lost' ? 'text-rose-600' : 'text-slate-500';
+    const m = matchesCache.get(b.matchId);
+    const matchLabel = m
+      ? `${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)}`
+      : b.matchLabel;
+    return `
+      <div class="bet-history-row ${statusClass}">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium">${matchLabel}</div>
+          <div class="text-xs text-slate-500">${b.marketLabel} → ${b.selectionLabel} @ ${b.odds}</div>
+        </div>
+        <div class="text-right">
+          <div class="font-semibold ${payoutCls}">${payout} pts</div>
+          <span class="status-badge ${b.status}">${b.status}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 // ── Tabs ───────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -135,32 +205,38 @@ function renderMatches(matches) {
     const cls = m.status === 'settled' ? 'match-card is-settled'
               : isClosed ? 'match-card is-closed'
               : 'match-card';
-    const score = m.finalScore ? `<span class="font-bold">${m.finalScore.home} - ${m.finalScore.away}</span>` :
-                   `<span class="text-slate-400 text-sm">vs</span>`;
+
+    // Score area: final > live > pre-match "vs"
+    let scoreHtml;
+    if (m.finalScore) {
+      scoreHtml = `<span class="vs">${m.finalScore.home} - ${m.finalScore.away}</span>`;
+    } else if (m.status === 'live' && m.liveScore) {
+      scoreHtml = `<span class="vs live">${m.liveScore.home} - ${m.liveScore.away}<br><span class="text-[10px] font-normal">${m.liveScore.minute || ''}'</span></span>`;
+    } else {
+      scoreHtml = `<span class="vs text-slate-400 text-sm">vs<br><span class="text-[10px] font-normal">${ko.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span>`;
+    }
+
     const stageLabel = stageDisplayLabel(m);
     return `
       <div class="${cls}" data-match-id="${m.id}">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 text-xs text-slate-500 mb-1 flex-wrap">
-              <span class="status-badge ${m.status}">${m.status}</span>
-              <span>${formatKickoff(ko)}</span>
-              <span>· ${stageLabel}</span>
-            </div>
-            <div class="flex items-center gap-2 font-medium flex-wrap">
-              <span>${m.homeFlag || ''} ${formatTeam(m.homeTeam, m.homeSlot)}</span>
-              ${score}
-              <span>${m.awayFlag || ''} ${formatTeam(m.awayTeam, m.awaySlot)}</span>
-            </div>
-            ${m.venue ? `<div class="text-xs text-slate-400 mt-1">${m.venue}</div>` : ''}
-          </div>
-          ${isClosed ? '' : `
-          <div class="text-right text-xs text-slate-500">
-            <div>${(m.odds?.home ?? '-')}</div>
-            <div>${(m.odds?.draw ?? '-')}</div>
-            <div>${(m.odds?.away ?? '-')}</div>
-          </div>`}
+        <div class="flex items-center justify-between gap-2 text-xs text-slate-500 mb-2 flex-wrap">
+          <span class="flex items-center gap-2">
+            <span class="status-badge ${m.status}">${m.status}</span>
+            <span>${formatKickoff(ko)}</span>
+            <span>· ${stageLabel}</span>
+          </span>
+          ${isClosed ? '' : `<span class="text-right">odds: ${m.odds?.home ?? '-'} / ${m.odds?.draw ?? '-'} / ${m.odds?.away ?? '-'}</span>`}
         </div>
+        <div class="match-row font-medium">
+          <div class="home">
+            <span class="flag">${m.homeFlag || ''}</span> ${formatTeam(m.homeTeam, m.homeSlot)}
+          </div>
+          ${scoreHtml}
+          <div class="away">
+            ${formatTeam(m.awayTeam, m.awaySlot)} <span class="flag">${m.awayFlag || ''}</span>
+          </div>
+        </div>
+        ${m.venue ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue}</div>` : ''}
       </div>
     `;
   }).join('');
@@ -438,47 +514,69 @@ function renderMyBets(bets) {
 }
 
 // ── Bracket tab ────────────────────────────────────────────────
-// Re-renders whenever matchesCache changes (called from subscribeMatches).
+// Tree-style: 6 columns (R32 → R16 → QF → SF → 3rd → Final).
+// Each column flex-grows; matches inside a column are evenly spaced so the
+// later rounds visually line up with the centre of their feeder pair.
 function renderBracket() {
   const root = $('bracket-list');
   if (!root) return;
   const ms = Array.from(matchesCache.values());
-  const stages = [
-    { code: 'r32',       label: 'Round of 32 · 32 強' },
-    { code: 'r16',       label: 'Round of 16 · 16 強' },
-    { code: 'qf',        label: 'Quarter-finals · 八強' },
-    { code: 'sf',        label: 'Semi-finals · 四強' },
-    { code: '3rd-place', label: '3rd Place · 季軍戰' },
-    { code: 'final',     label: '🏆 Final · 決賽' },
+  const cols = [
+    { code: 'r32',       label: 'Round of 32 / 32強', count: 16 },
+    { code: 'r16',       label: 'Round of 16 / 16強', count: 8 },
+    { code: 'qf',        label: 'Quarter / 八強',     count: 4 },
+    { code: 'sf',        label: 'Semi / 四強',         count: 2 },
+    { code: '3rd-place', label: '3rd / 季軍',          count: 1 },
+    { code: 'final',     label: '🏆 Final / 決賽',     count: 1 },
   ];
-  const html = stages.map(s => {
-    const stageMatches = ms.filter(m => m.stage === s.code)
+  const colsHtml = cols.map(c => {
+    const stageMatches = ms.filter(m => m.stage === c.code)
       .sort((a, b) => a.kickoffISO.localeCompare(b.kickoffISO));
-    if (stageMatches.length === 0) return '';
-    const cards = stageMatches.map(m => {
-      const ko = new Date(m.kickoffISO);
-      const score = m.finalScore
-        ? `<span class="font-bold">${m.finalScore.home} - ${m.finalScore.away}</span>`
-        : `<span class="text-slate-400 text-xs">vs</span>`;
-      return `
-        <div class="bracket-card">
-          <div class="text-xs text-slate-500 mb-1">${formatKickoff(ko)} · ${m.venue || ''}</div>
-          <div class="flex items-center gap-2 text-sm">
-            <span>${m.homeFlag || '🏳️'} ${formatTeam(m.homeTeam, m.homeSlot)}</span>
-            ${score}
-            <span>${m.awayFlag || '🏳️'} ${formatTeam(m.awayTeam, m.awaySlot)}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
+    const items = (stageMatches.length ? stageMatches : Array.from({ length: c.count }, () => null))
+      .map(m => bracketMatchHtml(m, c.code === 'final'))
+      .join('');
     return `
-      <div class="bracket-stage">
-        <h3 class="font-semibold mt-4 mb-2">${s.label}</h3>
-        <div class="grid sm:grid-cols-2 gap-2">${cards}</div>
+      <div class="bracket-col">
+        <div class="bracket-col-title">${c.label}</div>
+        ${items}
       </div>
     `;
   }).join('');
-  root.innerHTML = html || '<p class="text-slate-500 text-sm">Knockout fixtures not loaded yet. Admin: import via the admin panel.</p>';
+  root.innerHTML = `<div class="bracket-grid">${colsHtml}</div>` ||
+    '<p class="text-slate-500 text-sm">Knockout fixtures not loaded yet.</p>';
+}
+
+function bracketMatchHtml(m, isFinal) {
+  if (!m) {
+    return `<div class="bracket-match"><div class="bm-date">—</div><div class="bm-team"><span class="bm-name slot-placeholder">TBD</span></div><div class="bm-divider"></div><div class="bm-team"><span class="bm-name slot-placeholder">TBD</span></div></div>`;
+  }
+  const ko = new Date(m.kickoffISO);
+  const dateLabel = ko.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const settledCls = m.status === 'settled' ? 'is-settled' : '';
+  const finalCls = isFinal ? 'is-final' : '';
+  const hs = m.finalScore ? m.finalScore.home : '';
+  const as_ = m.finalScore ? m.finalScore.away : '';
+  return `
+    <div class="bracket-match ${settledCls} ${finalCls}">
+      <div class="bm-date">${dateLabel}</div>
+      <div class="bm-team">
+        <span class="bm-name">${m.homeFlag || ''} ${shortTeamLabel(m.homeTeam, m.homeSlot)}</span>
+        <span class="bm-score">${hs}</span>
+      </div>
+      <div class="bm-divider"></div>
+      <div class="bm-team">
+        <span class="bm-name">${m.awayFlag || ''} ${shortTeamLabel(m.awayTeam, m.awaySlot)}</span>
+        <span class="bm-score">${as_}</span>
+      </div>
+    </div>
+  `;
+}
+
+// Compact team label for bracket cards: English only, with slot fallback.
+function shortTeamLabel(team, slot) {
+  if (team && team !== 'TBD') return team;
+  if (slot) return `<span class="slot-placeholder">${slot}</span>`;
+  return '<span class="slot-placeholder">TBD</span>';
 }
 
 // ── Standings tab ──────────────────────────────────────────────
@@ -529,35 +627,47 @@ function renderStandings() {
 
     const rowsHtml = sorted.map((r, i) => `
       <tr class="${i < 2 ? 'qualified-row' : ''}">
-        <td class="px-2 py-1">${i + 1}</td>
+        <td class="px-1 py-1 text-center">${i + 1}</td>
         <td class="px-2 py-1 whitespace-nowrap">${r.flag || ''} ${teamLabel(r.team)}</td>
-        <td class="px-2 py-1 text-center">${r.MP}</td>
-        <td class="px-2 py-1 text-center">${r.W}</td>
-        <td class="px-2 py-1 text-center">${r.D}</td>
-        <td class="px-2 py-1 text-center">${r.L}</td>
-        <td class="px-2 py-1 text-center">${r.GF}</td>
-        <td class="px-2 py-1 text-center">${r.GA}</td>
-        <td class="px-2 py-1 text-center">${r.GD > 0 ? '+' + r.GD : r.GD}</td>
-        <td class="px-2 py-1 text-center font-semibold">${r.Pts}</td>
+        <td class="px-1 py-1 text-center">${r.MP}</td>
+        <td class="px-1 py-1 text-center">${r.W}</td>
+        <td class="px-1 py-1 text-center">${r.D}</td>
+        <td class="px-1 py-1 text-center">${r.L}</td>
+        <td class="px-1 py-1 text-center">${r.GF}</td>
+        <td class="px-1 py-1 text-center">${r.GA}</td>
+        <td class="px-1 py-1 text-center">${r.GD > 0 ? '+' + r.GD : r.GD}</td>
+        <td class="px-1 py-1 text-center font-semibold">${r.Pts}</td>
       </tr>
     `).join('');
     return `
       <div class="standings-group">
         <h3 class="font-semibold mt-4 mb-2">Group ${letter}</h3>
         <div class="overflow-x-auto">
-        <table class="standings-table w-full text-sm">
+        <table class="standings-table text-sm">
+          <colgroup>
+            <col class="col-rank">
+            <col class="col-team">
+            <col class="col-stat">
+            <col class="col-stat">
+            <col class="col-stat">
+            <col class="col-stat">
+            <col class="col-stat">
+            <col class="col-stat">
+            <col class="col-gd">
+            <col class="col-pts">
+          </colgroup>
           <thead class="text-xs text-slate-500">
             <tr>
-              <th class="px-2 py-1 text-left">#</th>
-              <th class="px-2 py-1 text-left">Team 隊伍</th>
-              <th class="px-2 py-1">MP</th>
-              <th class="px-2 py-1">W</th>
-              <th class="px-2 py-1">D</th>
-              <th class="px-2 py-1">L</th>
-              <th class="px-2 py-1">GF</th>
-              <th class="px-2 py-1">GA</th>
-              <th class="px-2 py-1">GD</th>
-              <th class="px-2 py-1">Pts</th>
+              <th class="px-2 py-1 text-center">#</th>
+              <th class="px-2 py-1 text-left">Team</th>
+              <th class="px-1 py-1 text-center">MP</th>
+              <th class="px-1 py-1 text-center">W</th>
+              <th class="px-1 py-1 text-center">D</th>
+              <th class="px-1 py-1 text-center">L</th>
+              <th class="px-1 py-1 text-center">GF</th>
+              <th class="px-1 py-1 text-center">GA</th>
+              <th class="px-1 py-1 text-center">GD</th>
+              <th class="px-1 py-1 text-center">Pts</th>
             </tr>
           </thead>
           <tbody>${rowsHtml}</tbody>

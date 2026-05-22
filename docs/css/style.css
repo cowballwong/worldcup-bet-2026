@@ -3,6 +3,23 @@
 #bet-modal.flex,
 #match-modal.flex { display: flex; }
 
+/* ─── Match card: centered 3-column grid (home / score / away) ─── */
+.match-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.match-row .home { justify-self: end;   text-align: right; }
+.match-row .away { justify-self: start; text-align: left;  }
+.match-row .vs   { font-weight: 600; min-width: 70px; text-align: center; }
+.match-row .vs.live { color: #dc2626; }
+.match-row .flag { font-size: 1.4em; }
+
+@media (max-width: 480px) {
+  .match-row { grid-template-columns: 1fr auto 1fr; gap: 6px; }
+}
+
 .match-card {
   display: block;
   background: white;
@@ -135,13 +152,16 @@
   padding: 8px 12px;
 }
 
-/* Standings */
+/* Standings — fixed column widths so each row aligns perfectly */
 .standings-table {
   border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
 }
 .standings-table thead th {
   background: #f1f5f9;
   border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
 }
 .standings-table tbody tr {
   border-bottom: 1px solid #f1f5f9;
@@ -152,4 +172,138 @@
 .standings-table tbody tr.qualified-row td:first-child {
   color: #15803d;
   font-weight: 700;
+}
+.standings-table col.col-rank   { width: 32px; }
+.standings-table col.col-team   { width: auto;  }
+.standings-table col.col-stat   { width: 36px; }
+.standings-table col.col-gd     { width: 44px; }
+.standings-table col.col-pts    { width: 46px; }
+.standings-table th, .standings-table td {
+  font-variant-numeric: tabular-nums;
+}
+.standings-table .team-bilingual {
+  white-space: nowrap;
+}
+
+/* ─── Bracket tree visualization ─── */
+.bracket-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.bracket-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bracket-col-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 700;
+  text-align: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 2px;
+}
+.bracket-match {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  flex: 1;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.bracket-match.is-settled { background: #f0fdf4; border-color: #86efac; }
+.bracket-match .bm-date  { color: #94a3b8; font-size: 9px; margin-bottom: 3px; }
+.bracket-match .bm-team  { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.bracket-match .bm-team .bm-name  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bracket-match .bm-team .bm-score { font-weight: 700; min-width: 14px; text-align: right; }
+.bracket-match .bm-divider { border-top: 1px dashed #e2e8f0; margin: 3px 0; }
+.bracket-match.is-final {
+  border: 2px solid #f59e0b;
+  background: linear-gradient(180deg, #fffbeb, #fef3c7);
+  min-height: 70px;
+}
+
+/* Visual connecting lines between rounds (simple right border on each col) */
+.bracket-col:not(:last-child) .bracket-match {
+  position: relative;
+}
+.bracket-col:not(:last-child) .bracket-match::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  width: 6px;
+  height: 1px;
+  background: #cbd5e1;
+}
+
+@media (max-width: 720px) {
+  .bracket-grid { grid-template-columns: repeat(6, 140px); }
+}
+
+/* ─── Dark mode ─── */
+[data-theme="dark"] {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+[data-theme="dark"] body { background: #0f172a; color: #e2e8f0; }
+[data-theme="dark"] .match-card,
+[data-theme="dark"] .leaderboard-row,
+[data-theme="dark"] .bet-history-row,
+[data-theme="dark"] .bracket-card,
+[data-theme="dark"] .bracket-match {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .match-card.is-settled,
+[data-theme="dark"] .bracket-match.is-settled {
+  background: #064e3b;
+  border-color: #166534;
+}
+[data-theme="dark"] .standings-table thead th {
+  background: #1e293b;
+  color: #cbd5e1;
+  border-bottom-color: #334155;
+}
+[data-theme="dark"] .standings-table tbody tr {
+  border-bottom-color: #1e293b;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .standings-table tbody tr.qualified-row { background: #064e3b; }
+[data-theme="dark"] .team-bilingual .team-zh { color: #94a3b8; }
+[data-theme="dark"] .slot-placeholder { color: #64748b; }
+[data-theme="dark"] .bracket-col-title { color: #94a3b8; border-bottom-color: #334155; }
+[data-theme="dark"] .bracket-match .bm-date { color: #64748b; }
+[data-theme="dark"] .bracket-match .bm-divider { border-top-color: #334155; }
+[data-theme="dark"] .bracket-col:not(:last-child) .bracket-match::after { background: #475569; }
+[data-theme="dark"] .bracket-match.is-final {
+  background: linear-gradient(180deg, #422006, #78350f);
+  border-color: #f59e0b;
+  color: #fef3c7;
+}
+[data-theme="dark"] header.bg-emerald-700 { background: #064e3b; }
+[data-theme="dark"] header.bg-rose-700    { background: #7f1d1d; }
+/* Override Tailwind utility classes in dark */
+[data-theme="dark"] .bg-white      { background: #1e293b !important; }
+[data-theme="dark"] .bg-slate-50   { background: #0f172a !important; }
+[data-theme="dark"] .bg-slate-100  { background: #334155 !important; }
+[data-theme="dark"] .text-slate-500{ color: #94a3b8 !important; }
+[data-theme="dark"] .text-slate-400{ color: #64748b !important; }
+[data-theme="dark"] .text-slate-800{ color: #e2e8f0 !important; }
+[data-theme="dark"] .border-slate-200 { border-color: #334155 !important; }
+[data-theme="dark"] .border-slate-300 { border-color: #475569 !important; }
+[data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+  background: #0f172a; color: #e2e8f0; border-color: #475569;
 }

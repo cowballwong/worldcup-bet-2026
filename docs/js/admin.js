@@ -5,11 +5,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where,
-  getDocs, orderBy, onSnapshot, writeBatch, serverTimestamp, increment
+  getDocs, orderBy, onSnapshot, writeBatch, serverTimestamp, increment, addDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
-import { settleBetsForMatch } from "./markets.js";
+import { settleBetsForMatch, MARKETS } from "./markets.js";
+import { TEAM_ZH } from "./teams-zh.js";
+
+const LILLYROSE_UID = 'lillyrose-ai';
+const LILLYROSE_NAME = 'LillyRose 🤖';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -130,6 +134,10 @@ function openMatchModal(matchId, m) {
   $('m-odds-under').value = m?.odds?.under25 ?? '';
   $('m-odds-btts-yes').value = m?.odds?.btts_yes ?? '';
   $('m-odds-btts-no').value = m?.odds?.btts_no ?? '';
+  $('m-status').value = m?.status || 'scheduled';
+  $('m-live-home').value = m?.liveScore?.home ?? '';
+  $('m-live-away').value = m?.liveScore?.away ?? '';
+  $('m-live-minute').value = m?.liveScore?.minute ?? '';
   $('m-ht-home').value = m?.halftimeScore?.home ?? '';
   $('m-ht-away').value = m?.halftimeScore?.away ?? '';
   $('m-ft-home').value = m?.finalScore?.home ?? '';
@@ -171,6 +179,14 @@ function readMatchForm() {
     },
     finalScore: (ftH != null && ftA != null) ? { home: ftH, away: ftA } : null,
     halftimeScore: (htH != null && htA != null) ? { home: htH, away: htA } : null,
+    status: $('m-status').value || 'scheduled',
+    liveScore: (() => {
+      const lh = parseIntOrNull($('m-live-home').value);
+      const la = parseIntOrNull($('m-live-away').value);
+      const lm = parseIntOrNull($('m-live-minute').value);
+      if (lh == null || la == null) return null;
+      return { home: lh, away: la, minute: lm };
+    })(),
   };
 }
 
@@ -204,7 +220,9 @@ async function saveMatch(forSettle) {
     setStatus('To settle, both halftime and final scores must be entered.', true);
     return null;
   }
-  const status = m.finalScore ? 'settled' : 'scheduled';
+  // If a final score is entered we force-settle status (regardless of dropdown);
+  // otherwise honour the explicit status from the form.
+  const status = m.finalScore ? 'settled' : (m.status || 'scheduled');
   const payload = { ...m, status, updatedAt: serverTimestamp() };
   await setDoc(doc(db, 'matches', m.id), payload, { merge: true });
   setStatus('Saved.', false);
@@ -312,6 +330,124 @@ $('bulk-import-btn').addEventListener('click', async () => {
 fetch('data/fixtures.json').then(r => r.json()).then(j => {
   $('bulk-import-json').value = JSON.stringify(j, null, 2);
 }).catch(() => {});
+
+// ── LillyRose AI player ────────────────────────────────────────
+$('lr-create')?.addEventListener('click', async () => {
+  setLR('Creating LillyRose user…');
+  try {
+    await setDoc(doc(db, 'users', LILLYROSE_UID), {
+      email: 'lillyrose@ai.local',
+      displayName: LILLYROSE_NAME,
+      photoURL: '',
+      balance: 1000,
+      isAI: true,
+      joinedAt: serverTimestamp(),
+    }, { merge: true });
+    setLR('LillyRose user created. Balance: 1000 pts.', false);
+  } catch (e) {
+    console.error(e);
+    setLR(`Failed: ${e.message}`, true);
+  }
+});
+
+$('lr-generate')?.addEventListener('click', async () => {
+  const hours = parseInt($('lr-window-hours').value, 10) || 12;
+  setLR(`Looking up matches in next ${hours}h…`);
+  try {
+    const now = Date.now();
+    const horizon = now + hours * 3600_000;
+
+    // Load all matches + LillyRose's existing bets
+    const [matchesSnap, lrBetsSnap] = await Promise.all([
+      getDocs(collection(db, 'matches')),
+      getDocs(query(collection(db, 'bets'), where('userId', '==', LILLYROSE_UID))),
+    ]);
+    const matches = [];
+    matchesSnap.forEach(d => matches.push({ id: d.id, ...d.data() }));
+    const lrBetMatchIds = new Set();
+    lrBetsSnap.forEach(d => lrBetMatchIds.add(d.data().matchId));
+
+    // Eligible: kickoff within window, not yet kicked off, not TBD, no existing LR bet
+    const targets = matches.filter(m => {
+      const ko = new Date(m.kickoffISO).getTime();
+      return ko > now && ko < horizon
+          && m.homeTeam && m.homeTeam !== 'TBD'
+          && m.awayTeam && m.awayTeam !== 'TBD'
+          && !lrBetMatchIds.has(m.id);
+    }).sort((a, b) => a.kickoffISO.localeCompare(b.kickoffISO));
+
+    if (targets.length === 0) {
+      setLR('No eligible upcoming matches in window. Nothing to do.', false);
+      return;
+    }
+
+    // Place a bet on the 1X2 favourite for each
+    const batch = writeBatch(db);
+    const userRef = doc(db, 'users', LILLYROSE_UID);
+    const uSnap = await getDoc(userRef);
+    if (!uSnap.exists()) {
+      setLR('LillyRose user doc not found — click "Create LillyRose user" first.', true);
+      return;
+    }
+    let totalStake = 0;
+    const lines = [];
+    for (const m of targets) {
+      const o = m.odds || {};
+      const candidates = [
+        { code: 'home', odds: o.home, team: m.homeTeam },
+        { code: 'draw', odds: o.draw, team: 'Draw' },
+        { code: 'away', odds: o.away, team: m.awayTeam },
+      ].filter(c => Number.isFinite(c.odds));
+      if (candidates.length === 0) continue;
+      // Favourite = lowest odds
+      candidates.sort((a, b) => a.odds - b.odds);
+      const pick = candidates[0];
+      // Stake 25–100, biased lower for risky long-shots
+      const stake = 25 + Math.floor(Math.random() * 76);
+      totalStake += stake;
+      const betRef = doc(collection(db, 'bets'));
+      const homeZh = TEAM_ZH[m.homeTeam] || '';
+      const awayZh = TEAM_ZH[m.awayTeam] || '';
+      batch.set(betRef, {
+        userId: LILLYROSE_UID,
+        userEmail: 'lillyrose@ai.local',
+        userDisplayName: LILLYROSE_NAME,
+        matchId: m.id,
+        matchLabel: `${m.homeTeam} ${homeZh ? '(' + homeZh + ')' : ''} vs ${m.awayTeam} ${awayZh ? '(' + awayZh + ')' : ''}`,
+        market: '1x2',
+        marketLabel: 'Match result · 1X2',
+        selection: pick.code,
+        selectionLabel: pick.code === 'draw' ? 'Draw' : `${pick.team} win`,
+        stake,
+        odds: pick.odds,
+        status: 'open',
+        placedAt: serverTimestamp(),
+        isAI: true,
+      });
+      lines.push(`${m.homeTeam} vs ${m.awayTeam} — pick ${pick.code} (${pick.team}) @ ${pick.odds}, stake ${stake}`);
+    }
+    // Decrement LillyRose's balance by total stake
+    batch.update(userRef, { balance: increment(-totalStake) });
+    await batch.commit();
+
+    setLR(`✅ Generated ${targets.length} bet${targets.length === 1 ? '' : 's'}, total stake ${totalStake} pts.`, false);
+    $('lr-bets-summary').innerHTML = lines.map(l => `<div class="text-slate-600">• ${l}</div>`).join('');
+  } catch (e) {
+    console.error(e);
+    setLR(`Failed: ${e.message}`, true);
+  }
+});
+
+function setLR(msg, isErr) {
+  $('lr-status').textContent = msg;
+  $('lr-status').className = `text-sm ${isErr ? 'text-rose-600' : 'text-emerald-700'}`;
+}
+
+// ── Theme toggle ───────────────────────────────────────────────
+(() => {
+  const t = localStorage.getItem('wc-theme');
+  if (t) document.documentElement.dataset.theme = t;
+})();
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg) {
