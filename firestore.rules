@@ -69,7 +69,13 @@ service cloud.firestore {
                     && request.resource.data.stake >= 10
                     && request.resource.data.stake <= 200
                     && request.resource.data.status == 'open';
-      allow update, delete: if isAdmin();
+      // Owners can edit/delete their own bets while still open
+      // (used by the My Bets ✏️/🗑️ buttons before kickoff).
+      // We don't check match kickoff in rules — frontend enforces that
+      // and a self-inflicted late delete only refunds the user.
+      allow update, delete: if isAdmin()
+                            || (request.auth.uid == resource.data.userId
+                                && resource.data.status == 'open');
     }
   }
 }

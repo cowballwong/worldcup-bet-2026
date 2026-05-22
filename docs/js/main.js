@@ -4,7 +4,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, addDoc, collection, query, where,
+  getFirestore, doc, getDoc, setDoc, addDoc, deleteDoc, collection, query, where,
   orderBy, onSnapshot, serverTimestamp, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -209,11 +209,11 @@ function renderMatches(matches) {
     // Score area: final > live > pre-match "vs"
     let scoreHtml;
     if (m.finalScore) {
-      scoreHtml = `<span class="vs">${m.finalScore.home} - ${m.finalScore.away}</span>`;
+      scoreHtml = `<div class="vs"><span>${m.finalScore.home} - ${m.finalScore.away}</span><span class="vs-time">FT</span></div>`;
     } else if (m.status === 'live' && m.liveScore) {
-      scoreHtml = `<span class="vs live">${m.liveScore.home} - ${m.liveScore.away}<br><span class="text-[10px] font-normal">${m.liveScore.minute || ''}'</span></span>`;
+      scoreHtml = `<div class="vs live"><span>${m.liveScore.home} - ${m.liveScore.away}</span><span class="vs-time">● ${m.liveScore.minute || ''}'</span></div>`;
     } else {
-      scoreHtml = `<span class="vs text-slate-400 text-sm">vs<br><span class="text-[10px] font-normal">${ko.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span>`;
+      scoreHtml = `<div class="vs text-slate-400"><span>vs</span><span class="vs-time">${ko.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>`;
     }
 
     const stageLabel = stageDisplayLabel(m);
@@ -227,13 +227,15 @@ function renderMatches(matches) {
           </span>
           ${isClosed ? '' : `<span class="text-right">odds: ${m.odds?.home ?? '-'} / ${m.odds?.draw ?? '-'} / ${m.odds?.away ?? '-'}</span>`}
         </div>
-        <div class="match-row font-medium">
-          <div class="home">
-            <span class="flag">${m.homeFlag || ''}</span> ${formatTeam(m.homeTeam, m.homeSlot)}
+        <div class="match-row">
+          <div class="team">
+            <span class="flag">${m.homeFlag || '🏳️'}</span>
+            ${formatTeam(m.homeTeam, m.homeSlot)}
           </div>
           ${scoreHtml}
-          <div class="away">
-            ${formatTeam(m.awayTeam, m.awaySlot)} <span class="flag">${m.awayFlag || ''}</span>
+          <div class="team">
+            <span class="flag">${m.awayFlag || '🏳️'}</span>
+            ${formatTeam(m.awayTeam, m.awaySlot)}
           </div>
         </div>
         ${m.venue ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue}</div>` : ''}
@@ -492,25 +494,96 @@ function renderMyBets(bets) {
                    b.status === 'lost' ? `-${b.stake}` :
                    `${b.stake}`;
     const payoutCls = b.status === 'won' ? 'text-emerald-700' : b.status === 'lost' ? 'text-rose-600' : 'text-slate-500';
-    // Try to render bilingual match label from live match data; fall back to the
-    // English label stored at placement time for older bets.
     const m = matchesCache.get(b.matchId);
     const matchLabel = m
       ? `${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)}`
       : b.matchLabel;
+    // Edit/Delete only available for open bets on matches that haven't kicked off yet.
+    const canModify = b.status === 'open' && m && !isPastKickoff(m);
+    const actions = canModify ? `
+      <div class="bet-actions">
+        <button class="btn-edit"   data-bet-id="${b.id}" data-match-id="${b.matchId}" title="Modify bet">✏️</button>
+        <button class="btn-delete" data-bet-id="${b.id}" data-stake="${b.stake}" title="Delete & refund">🗑️</button>
+      </div>` : '';
     return `
       <div class="bet-history-row ${statusClass}">
         <div class="flex-1 min-w-0">
           <div class="text-sm font-medium">${matchLabel}</div>
           <div class="text-xs text-slate-500">${b.marketLabel} → ${b.selectionLabel} @ ${b.odds}</div>
         </div>
-        <div class="text-right">
-          <div class="font-semibold ${payoutCls}">${payout} pts</div>
-          <span class="status-badge ${b.status}">${b.status}</span>
+        <div class="text-right flex items-center gap-2">
+          <div>
+            <div class="font-semibold ${payoutCls}">${payout} pts</div>
+            <span class="status-badge ${b.status}">${b.status}</span>
+          </div>
+          ${actions}
         </div>
       </div>
     `;
   }).join('');
+
+  // Wire Edit/Delete buttons
+  root.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const betId = btn.dataset.betId;
+      const stake = parseInt(btn.dataset.stake, 10);
+      if (!confirm(`Delete this bet and refund ${stake} pts?`)) return;
+      try {
+        await runTransaction(db, async (tx) => {
+          const betRef = doc(db, 'bets', betId);
+          const betSnap = await tx.get(betRef);
+          if (!betSnap.exists()) throw new Error('Bet missing.');
+          const bet = betSnap.data();
+          if (bet.status !== 'open') throw new Error('Bet already settled.');
+          const m = matchesCache.get(bet.matchId);
+          if (m && isPastKickoff(m)) throw new Error('Match already kicked off.');
+          const userRef = doc(db, 'users', currentUser.uid);
+          const uSnap = await tx.get(userRef);
+          if (!uSnap.exists()) throw new Error('User missing.');
+          tx.update(userRef, { balance: uSnap.data().balance + bet.stake });
+          tx.delete(betRef);
+        });
+        toast(`Bet refunded · 退回 ${stake} pts`);
+      } catch (err) {
+        console.error(err);
+        toast(`Delete failed: ${err.message}`);
+      }
+    });
+  });
+
+  root.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const betId = btn.dataset.betId;
+      const matchId = btn.dataset.matchId;
+      // "Modify" = delete & refund the old bet, then open the bet modal for the same match
+      // so the user picks fresh market / selection / stake.
+      try {
+        await runTransaction(db, async (tx) => {
+          const betRef = doc(db, 'bets', betId);
+          const betSnap = await tx.get(betRef);
+          if (!betSnap.exists()) throw new Error('Bet missing.');
+          const bet = betSnap.data();
+          if (bet.status !== 'open') throw new Error('Bet already settled.');
+          const m = matchesCache.get(bet.matchId);
+          if (m && isPastKickoff(m)) throw new Error('Match already kicked off.');
+          const userRef = doc(db, 'users', currentUser.uid);
+          const uSnap = await tx.get(userRef);
+          if (!uSnap.exists()) throw new Error('User missing.');
+          tx.update(userRef, { balance: uSnap.data().balance + bet.stake });
+          tx.delete(betRef);
+        });
+        // Switch to Matches tab + open the bet modal for re-bet
+        document.querySelector('.tab-btn[data-tab="matches"]')?.click();
+        setTimeout(() => openBetModal(matchId), 100);
+        toast('Stake refunded — place your new bet');
+      } catch (err) {
+        console.error(err);
+        toast(`Edit failed: ${err.message}`);
+      }
+    });
+  });
 }
 
 // ── Bracket tab ────────────────────────────────────────────────

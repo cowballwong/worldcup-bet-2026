@@ -3,22 +3,70 @@
 #bet-modal.flex,
 #match-modal.flex { display: flex; }
 
-/* ─── Match card: centered 3-column grid (home / score / away) ─── */
+/* ─── Match card: flag-prominent 3-column layout ─── */
 .match-row {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 6px 0;
 }
-.match-row .home { justify-self: end;   text-align: right; }
-.match-row .away { justify-self: start; text-align: left;  }
-.match-row .vs   { font-weight: 600; min-width: 70px; text-align: center; }
+.match-row .team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  min-width: 0;
+}
+.match-row .team .flag {
+  font-size: 2.6em;
+  line-height: 1;
+}
+.match-row .team .team-bilingual { line-height: 1.05; }
+.match-row .team .team-bilingual .team-en { font-size: 0.9em; }
+.match-row .vs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  min-width: 60px;
+  text-align: center;
+  font-size: 1.1em;
+}
+.match-row .vs .vs-time {
+  font-size: 0.55em;
+  font-weight: 400;
+  color: #64748b;
+  margin-top: 4px;
+  white-space: nowrap;
+}
 .match-row .vs.live { color: #dc2626; }
-.match-row .flag { font-size: 1.4em; }
+.match-row .vs.live .vs-time { color: #dc2626; }
 
 @media (max-width: 480px) {
-  .match-row { grid-template-columns: 1fr auto 1fr; gap: 6px; }
+  .match-row .team .flag { font-size: 2em; }
+  .match-row .team .team-bilingual .team-en { font-size: 0.85em; }
 }
+
+/* My Bets row — Edit/Delete buttons */
+.bet-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 6px;
+}
+.bet-actions button {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.bet-actions .btn-edit   { background: #e0f2fe; color: #075985; }
+.bet-actions .btn-edit:hover { background: #bae6fd; }
+.bet-actions .btn-delete { background: #fee2e2; color: #991b1b; }
+.bet-actions .btn-delete:hover { background: #fecaca; }
 
 .match-card {
   display: block;
