@@ -216,11 +216,15 @@ async function saveMatch(forSettle) {
 
 async function settleMatch(match) {
   setStatus('Settling bets…', false);
-  // Read all open bets on this match
+  // Read all bets on this match; filter to open client-side
+  // (avoids a composite index for matchId + status).
   const betsSnap = await getDocs(query(collection(db, 'bets'),
-    where('matchId', '==', match.id), where('status', '==', 'open')));
+    where('matchId', '==', match.id)));
   const openBets = [];
-  betsSnap.forEach(d => openBets.push({ docId: d.id, ...d.data() }));
+  betsSnap.forEach(d => {
+    const data = d.data();
+    if (data.status === 'open') openBets.push({ docId: d.id, ...data });
+  });
 
   if (openBets.length === 0) {
     setStatus('Saved. No open bets to settle.', false);

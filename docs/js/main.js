@@ -355,13 +355,23 @@ function renderLeaderboard(rows) {
 // ── My Bets ────────────────────────────────────────────────────
 function subscribeMyBets() {
   if (unsubMyBets) unsubMyBets();
+  // single where(), no orderBy — avoids needing a composite Firestore index.
+  // Sort client-side by placedAt below.
   const q = query(collection(db, 'bets'),
-    where('userId', '==', currentUser.uid),
-    orderBy('placedAt', 'desc'));
+    where('userId', '==', currentUser.uid));
   unsubMyBets = onSnapshot(q, snap => {
     const bets = [];
     snap.forEach(d => bets.push({ id: d.id, ...d.data() }));
+    bets.sort((a, b) => {
+      const ta = a.placedAt?.toMillis?.() ?? 0;
+      const tb = b.placedAt?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
     renderMyBets(bets);
+  }, err => {
+    console.error('subscribeMyBets error:', err);
+    document.getElementById('mybets-list').innerHTML =
+      `<p class="text-rose-600 text-sm">Failed to load bets: ${err.message}</p>`;
   });
 }
 
