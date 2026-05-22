@@ -55,16 +55,25 @@ export const TEAM_ZH = {
   "TBD":                      "待定",
 };
 
-// Render a team label: "Mexico 墨西哥"
+// Render a team label as stacked bilingual HTML — English on top, 繁體 below.
+// Returns HTML; callers should use innerHTML, not textContent.
 export function teamLabel(en) {
+  if (!en) return "";
+  const zh = TEAM_ZH[en];
+  if (!zh) return `<span class="team-bilingual"><span class="team-en">${escape(en)}</span></span>`;
+  return `<span class="team-bilingual"><span class="team-en">${escape(en)}</span><span class="team-zh">${escape(zh)}</span></span>`;
+}
+
+// Plain-text version (no HTML) for places like aria-label or page titles.
+export function teamPlain(en) {
   if (!en) return "";
   const zh = TEAM_ZH[en];
   return zh ? `${en} ${zh}` : en;
 }
 
-// Short label for cards where space is tight: just English + brief zh
-export function teamShort(en) {
-  if (!en) return "";
-  const zh = TEAM_ZH[en];
-  return zh ? `${en} (${zh})` : en;
+function escape(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

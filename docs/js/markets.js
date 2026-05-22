@@ -5,6 +5,17 @@
 // options the player can choose, and an `evaluate(bet, match)` that
 // returns 'won' | 'lost' for that bet at settlement time.
 
+import { TEAM_ZH } from "./teams-zh.js";
+
+// Stacked bilingual label: English on top, 繁體 below.
+function bi(en, zh) {
+  return `<span class="team-bilingual"><span class="team-en">${en}</span><span class="team-zh">${zh}</span></span>`;
+}
+function teamBi(team, suffixEn, suffixZh, flag) {
+  const zh = TEAM_ZH[team] || '';
+  return `<span class="team-bilingual"><span class="team-en">${flag || ''} ${team}${suffixEn ? ' ' + suffixEn : ''}</span><span class="team-zh">${zh}${suffixZh || ''}</span></span>`;
+}
+
 export const MARKETS = {
 
   // ── 1X2 — Match result at full-time ───────────────────────
@@ -12,9 +23,9 @@ export const MARKETS = {
     label: 'Match result · 1X2 全場勝和負',
     selections(match) {
       return [
-        { code: 'home', label: `${match.homeFlag} ${match.homeTeam} win`, odds: match.odds.home },
-        { code: 'draw', label: 'Draw 和波',                                  odds: match.odds.draw },
-        { code: 'away', label: `${match.awayFlag} ${match.awayTeam} win`, odds: match.odds.away },
+        { code: 'home', label: teamBi(match.homeTeam, 'win', '勝', match.homeFlag), odds: match.odds.home },
+        { code: 'draw', label: bi('Draw', '和波'),                                   odds: match.odds.draw },
+        { code: 'away', label: teamBi(match.awayTeam, 'win', '勝', match.awayFlag), odds: match.odds.away },
       ];
     },
     evaluate(bet, match) {
@@ -39,7 +50,11 @@ export const MARKETS = {
       return SCORES.map(code => {
         const [h, a] = code.split('-').map(Number);
         const odds = exactScoreOdds(h, a);
-        return { code, label: `${match.homeFlag} ${h} - ${a} ${match.awayFlag}`, odds };
+        const enRow = `${match.homeFlag} ${h} - ${a} ${match.awayFlag}`;
+        const zhHome = TEAM_ZH[match.homeTeam] || match.homeTeam;
+        const zhAway = TEAM_ZH[match.awayTeam] || match.awayTeam;
+        const zhRow = `${zhHome} ${h} - ${a} ${zhAway}`;
+        return { code, label: bi(enRow, zhRow), odds };
       });
     },
     evaluate(bet, match) {
@@ -57,9 +72,9 @@ export const MARKETS = {
       // Use a flat 2.6/2.1/3.4 unless admin set per-match HT odds.
       const o = match.odds.ht || { home: 2.50, draw: 2.10, away: 3.40 };
       return [
-        { code: 'home', label: `${match.homeFlag} ${match.homeTeam} lead HT`, odds: o.home },
-        { code: 'draw', label: 'Level at HT 半場和',                            odds: o.draw },
-        { code: 'away', label: `${match.awayFlag} ${match.awayTeam} lead HT`, odds: o.away },
+        { code: 'home', label: teamBi(match.homeTeam, 'lead HT', '半場領先', match.homeFlag), odds: o.home },
+        { code: 'draw', label: bi('Level at HT', '半場和波'),                                  odds: o.draw },
+        { code: 'away', label: teamBi(match.awayTeam, 'lead HT', '半場領先', match.awayFlag), odds: o.away },
       ];
     },
     evaluate(bet, match) {
@@ -76,8 +91,8 @@ export const MARKETS = {
     label: 'Over/Under 2.5 · 入球大細',
     selections(match) {
       return [
-        { code: 'over',  label: 'Over 2.5 (3 球或以上) 大',  odds: match.odds.over25 },
-        { code: 'under', label: 'Under 2.5 (2 球或以下) 細', odds: match.odds.under25 },
+        { code: 'over',  label: bi('Over 2.5 goals',  '大 (3 球或以上)'),  odds: match.odds.over25 },
+        { code: 'under', label: bi('Under 2.5 goals', '細 (2 球或以下)'), odds: match.odds.under25 },
       ];
     },
     evaluate(bet, match) {
@@ -95,8 +110,8 @@ export const MARKETS = {
     label: 'Both teams to score · 兩隊入波',
     selections(match) {
       return [
-        { code: 'yes', label: 'Yes 係 (both score)',   odds: match.odds.btts_yes },
-        { code: 'no',  label: 'No 否 (at least one zero)', odds: match.odds.btts_no },
+        { code: 'yes', label: bi('Yes — both score',          '係 — 兩隊都入波'), odds: match.odds.btts_yes },
+        { code: 'no',  label: bi('No — at least one zero',    '否 — 至少一隊零蛋'), odds: match.odds.btts_no },
       ];
     },
     evaluate(bet, match) {

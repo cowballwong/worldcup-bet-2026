@@ -47,17 +47,27 @@
 
   <!-- Tabs -->
   <div class="flex border-b border-slate-200 mb-4 overflow-x-auto">
-    <button class="tab-btn px-3 py-2 font-medium text-emerald-700 border-b-2 border-emerald-700 whitespace-nowrap" data-tab="matches">⚽️ Matches</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="standings">📊 Standings</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="bracket">🏟️ Knockout</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="leaderboard">🏆 Leaderboard</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="mybets">🎟️ My Bets</button>
+    <button class="tab-btn px-3 py-2 font-medium text-emerald-700 border-b-2 border-emerald-700 whitespace-nowrap text-center" data-tab="matches">
+      <span class="block text-sm">⚽️ Matches</span><span class="block text-xs opacity-70">賽程</span>
+    </button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="standings">
+      <span class="block text-sm">📊 Standings</span><span class="block text-xs opacity-70">積分</span>
+    </button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="bracket">
+      <span class="block text-sm">🏟️ Knockout</span><span class="block text-xs opacity-70">淘汰賽</span>
+    </button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="leaderboard">
+      <span class="block text-sm">🏆 Leaderboard</span><span class="block text-xs opacity-70">排行榜</span>
+    </button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="mybets">
+      <span class="block text-sm">🎟️ My Bets</span><span class="block text-xs opacity-70">我的注</span>
+    </button>
   </div>
 
   <!-- Matches tab -->
   <section id="tab-matches" class="tab-panel">
     <div class="flex items-baseline justify-between mb-2">
-      <h2 class="font-semibold">Upcoming matches</h2>
+      <h2 class="font-semibold leading-tight">Upcoming matches<br><span class="text-xs text-slate-500 font-normal">即將開賽</span></h2>
       <span class="text-xs text-slate-500" id="match-count">—</span>
     </div>
     <div id="match-list" class="space-y-3">
@@ -67,7 +77,7 @@
 
   <!-- Standings tab -->
   <section id="tab-standings" class="tab-panel hidden">
-    <h2 class="font-semibold mb-2">Group standings · 小組積分</h2>
+    <h2 class="font-semibold leading-tight mb-2">Group standings<br><span class="text-xs text-slate-500 font-normal">小組積分榜</span></h2>
     <p class="text-xs text-slate-500 mb-2">Auto-computed from settled matches. Top 2 highlighted (advance to R32). Tiebreaker: Pts → GD → GF.</p>
     <div id="standings-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
@@ -76,7 +86,7 @@
 
   <!-- Bracket tab -->
   <section id="tab-bracket" class="tab-panel hidden">
-    <h2 class="font-semibold mb-2">Knockout bracket · 淘汰賽</h2>
+    <h2 class="font-semibold leading-tight mb-2">Knockout bracket<br><span class="text-xs text-slate-500 font-normal">淘汰賽</span></h2>
     <p class="text-xs text-slate-500 mb-2">Slot labels (1A, 2B, 3A/D/E/F etc) get replaced with actual teams by admin once groups conclude.</p>
     <div id="bracket-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
@@ -85,7 +95,7 @@
 
   <!-- Leaderboard tab -->
   <section id="tab-leaderboard" class="tab-panel hidden">
-    <h2 class="font-semibold mb-2">Standings · 排行榜</h2>
+    <h2 class="font-semibold leading-tight mb-2">Leaderboard<br><span class="text-xs text-slate-500 font-normal">排行榜</span></h2>
     <div id="leaderboard-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
     </div>
@@ -93,7 +103,7 @@
 
   <!-- My Bets tab -->
   <section id="tab-mybets" class="tab-panel hidden">
-    <h2 class="font-semibold mb-2">Your bets · 你嘅注單</h2>
+    <h2 class="font-semibold leading-tight mb-2">Your bets<br><span class="text-xs text-slate-500 font-normal">你嘅注單</span></h2>
     <div id="mybets-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
     </div>

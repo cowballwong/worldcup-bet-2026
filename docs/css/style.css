@@ -100,6 +100,33 @@
 
 #toast.show { display: block; }
 
+/* Bilingual team label — stacked, EN on top, 繁體 below */
+.team-bilingual {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.05;
+}
+.team-bilingual .team-en {
+  display: block;
+}
+.team-bilingual .team-zh {
+  display: block;
+  font-size: 0.78em;
+  color: #64748b;
+  font-weight: 400;
+  margin-top: 1px;
+}
+.match-card.is-settled .team-bilingual .team-zh { color: #4d7c0f; }
+
+/* Slot placeholder in knockout (e.g. "1A", "W R32-1") */
+.slot-placeholder {
+  display: inline-block;
+  font-style: italic;
+  color: #94a3b8;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
 /* Bracket */
 .bracket-card {
   background: white;

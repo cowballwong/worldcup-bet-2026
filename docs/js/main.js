@@ -182,8 +182,8 @@ function renderMatches(matches) {
 // Bilingual team label, with fallback to slot placeholder for knockout TBDs.
 function formatTeam(team, slot) {
   if (team && team !== 'TBD') return teamLabel(team);
-  if (slot) return `<span class="text-slate-400 italic">${slot}</span>`;
-  return '<span class="text-slate-400 italic">TBD 待定</span>';
+  if (slot) return `<span class="slot-placeholder">${slot}</span>`;
+  return '<span class="team-bilingual"><span class="team-en text-slate-400 italic">TBD</span><span class="team-zh">待定</span></span>';
 }
 
 function stageDisplayLabel(m) {
