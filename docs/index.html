@@ -46,10 +46,12 @@
 <main id="app-view" class="max-w-4xl mx-auto px-4 py-6 hidden">
 
   <!-- Tabs -->
-  <div class="flex border-b border-slate-200 mb-4">
-    <button class="tab-btn px-4 py-2 font-medium text-emerald-700 border-b-2 border-emerald-700" data-tab="matches">⚽️ Matches 賽程</button>
-    <button class="tab-btn px-4 py-2 font-medium text-slate-500 border-b-2 border-transparent" data-tab="leaderboard">🏆 Leaderboard 榜</button>
-    <button class="tab-btn px-4 py-2 font-medium text-slate-500 border-b-2 border-transparent" data-tab="mybets">🎟️ My Bets 我的注</button>
+  <div class="flex border-b border-slate-200 mb-4 overflow-x-auto">
+    <button class="tab-btn px-3 py-2 font-medium text-emerald-700 border-b-2 border-emerald-700 whitespace-nowrap" data-tab="matches">⚽️ Matches</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="standings">📊 Standings</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="bracket">🏟️ Knockout</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="leaderboard">🏆 Leaderboard</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="mybets">🎟️ My Bets</button>
   </div>
 
   <!-- Matches tab -->
@@ -59,6 +61,24 @@
       <span class="text-xs text-slate-500" id="match-count">—</span>
     </div>
     <div id="match-list" class="space-y-3">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <!-- Standings tab -->
+  <section id="tab-standings" class="tab-panel hidden">
+    <h2 class="font-semibold mb-2">Group standings · 小組積分</h2>
+    <p class="text-xs text-slate-500 mb-2">Auto-computed from settled matches. Top 2 highlighted (advance to R32). Tiebreaker: Pts → GD → GF.</p>
+    <div id="standings-list" class="space-y-2">
+      <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <!-- Bracket tab -->
+  <section id="tab-bracket" class="tab-panel hidden">
+    <h2 class="font-semibold mb-2">Knockout bracket · 淘汰賽</h2>
+    <p class="text-xs text-slate-500 mb-2">Slot labels (1A, 2B, 3A/D/E/F etc) get replaced with actual teams by admin once groups conclude.</p>
+    <div id="bracket-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
     </div>
   </section>

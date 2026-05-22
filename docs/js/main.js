@@ -10,6 +10,7 @@ import {
 
 import { firebaseConfig, APP_CONFIG } from "./firebase-config.js";
 import { MARKETS, getMarketLabel, getSelectionLabel } from "./markets.js";
+import { teamLabel, TEAM_ZH } from "./teams-zh.js";
 
 // ── Firebase init ──────────────────────────────────────────────
 const app = initializeApp(firebaseConfig);
@@ -118,6 +119,8 @@ function subscribeMatches() {
 }
 
 function renderMatches(matches) {
+  // Player view only shows group-stage + scheduled knockout matches with kickoff
+  // ahead. Knockout slot labels handled by formatTeam().
   const root = $('match-list');
   if (matches.length === 0) {
     root.innerHTML = '<p class="text-slate-500 text-sm">No matches yet. Admin: import the fixture list via the admin panel.</p>';
@@ -134,19 +137,20 @@ function renderMatches(matches) {
               : 'match-card';
     const score = m.finalScore ? `<span class="font-bold">${m.finalScore.home} - ${m.finalScore.away}</span>` :
                    `<span class="text-slate-400 text-sm">vs</span>`;
+    const stageLabel = stageDisplayLabel(m);
     return `
       <div class="${cls}" data-match-id="${m.id}">
         <div class="flex items-center justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+            <div class="flex items-center gap-2 text-xs text-slate-500 mb-1 flex-wrap">
               <span class="status-badge ${m.status}">${m.status}</span>
               <span>${formatKickoff(ko)}</span>
-              ${m.group ? `<span>· Group ${m.group}</span>` : ''}
+              <span>· ${stageLabel}</span>
             </div>
-            <div class="flex items-center gap-2 font-medium">
-              <span>${m.homeFlag || ''} ${m.homeTeam}</span>
+            <div class="flex items-center gap-2 font-medium flex-wrap">
+              <span>${m.homeFlag || ''} ${formatTeam(m.homeTeam, m.homeSlot)}</span>
               ${score}
-              <span>${m.awayFlag || ''} ${m.awayTeam}</span>
+              <span>${m.awayFlag || ''} ${formatTeam(m.awayTeam, m.awaySlot)}</span>
             </div>
             ${m.venue ? `<div class="text-xs text-slate-400 mt-1">${m.venue}</div>` : ''}
           </div>
@@ -165,9 +169,34 @@ function renderMatches(matches) {
   root.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', () => {
       if (card.classList.contains('is-closed') || card.classList.contains('is-settled')) return;
+      const m = matchesCache.get(card.dataset.matchId);
+      if (m && (m.homeTeam === 'TBD' || m.awayTeam === 'TBD')) {
+        toast('Teams TBD — bets open once admin sets the matchup.');
+        return;
+      }
       openBetModal(card.dataset.matchId);
     });
   });
+}
+
+// Bilingual team label, with fallback to slot placeholder for knockout TBDs.
+function formatTeam(team, slot) {
+  if (team && team !== 'TBD') return teamLabel(team);
+  if (slot) return `<span class="text-slate-400 italic">${slot}</span>`;
+  return '<span class="text-slate-400 italic">TBD 待定</span>';
+}
+
+function stageDisplayLabel(m) {
+  switch (m.stage) {
+    case 'group':     return m.group ? `Group ${m.group}` : 'Group';
+    case 'r32':       return 'Round of 32 · 32 強';
+    case 'r16':       return 'Round of 16 · 16 強';
+    case 'qf':        return 'Quarter-final · 八強';
+    case 'sf':        return 'Semi-final · 四強';
+    case '3rd-place': return '3rd Place · 季軍戰';
+    case 'final':     return '🏆 Final · 決賽';
+    default:          return m.stage || '';
+  }
 }
 
 function formatKickoff(d) {
@@ -195,7 +224,7 @@ function openBetModal(matchId) {
   activeSelection = null;
   activeOdds = null;
 
-  $('bet-modal-title').textContent = `${activeMatch.homeFlag} ${activeMatch.homeTeam} vs ${activeMatch.awayTeam} ${activeMatch.awayFlag}`;
+  $('bet-modal-title').innerHTML = `${activeMatch.homeFlag} ${teamLabel(activeMatch.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(activeMatch.awayTeam)} ${activeMatch.awayFlag}`;
   $('bet-modal-subtitle').textContent = formatKickoff(new Date(activeMatch.kickoffISO)) + (activeMatch.venue ? ` · ${activeMatch.venue}` : '');
 
   // Populate market dropdown
@@ -387,10 +416,16 @@ function renderMyBets(bets) {
                    b.status === 'lost' ? `-${b.stake}` :
                    `${b.stake}`;
     const payoutCls = b.status === 'won' ? 'text-emerald-700' : b.status === 'lost' ? 'text-rose-600' : 'text-slate-500';
+    // Try to render bilingual match label from live match data; fall back to the
+    // English label stored at placement time for older bets.
+    const m = matchesCache.get(b.matchId);
+    const matchLabel = m
+      ? `${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)}`
+      : b.matchLabel;
     return `
       <div class="bet-history-row ${statusClass}">
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium">${b.matchLabel}</div>
+          <div class="text-sm font-medium">${matchLabel}</div>
           <div class="text-xs text-slate-500">${b.marketLabel} → ${b.selectionLabel} @ ${b.odds}</div>
         </div>
         <div class="text-right">
@@ -401,6 +436,147 @@ function renderMyBets(bets) {
     `;
   }).join('');
 }
+
+// ── Bracket tab ────────────────────────────────────────────────
+// Re-renders whenever matchesCache changes (called from subscribeMatches).
+function renderBracket() {
+  const root = $('bracket-list');
+  if (!root) return;
+  const ms = Array.from(matchesCache.values());
+  const stages = [
+    { code: 'r32',       label: 'Round of 32 · 32 強' },
+    { code: 'r16',       label: 'Round of 16 · 16 強' },
+    { code: 'qf',        label: 'Quarter-finals · 八強' },
+    { code: 'sf',        label: 'Semi-finals · 四強' },
+    { code: '3rd-place', label: '3rd Place · 季軍戰' },
+    { code: 'final',     label: '🏆 Final · 決賽' },
+  ];
+  const html = stages.map(s => {
+    const stageMatches = ms.filter(m => m.stage === s.code)
+      .sort((a, b) => a.kickoffISO.localeCompare(b.kickoffISO));
+    if (stageMatches.length === 0) return '';
+    const cards = stageMatches.map(m => {
+      const ko = new Date(m.kickoffISO);
+      const score = m.finalScore
+        ? `<span class="font-bold">${m.finalScore.home} - ${m.finalScore.away}</span>`
+        : `<span class="text-slate-400 text-xs">vs</span>`;
+      return `
+        <div class="bracket-card">
+          <div class="text-xs text-slate-500 mb-1">${formatKickoff(ko)} · ${m.venue || ''}</div>
+          <div class="flex items-center gap-2 text-sm">
+            <span>${m.homeFlag || '🏳️'} ${formatTeam(m.homeTeam, m.homeSlot)}</span>
+            ${score}
+            <span>${m.awayFlag || '🏳️'} ${formatTeam(m.awayTeam, m.awaySlot)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="bracket-stage">
+        <h3 class="font-semibold mt-4 mb-2">${s.label}</h3>
+        <div class="grid sm:grid-cols-2 gap-2">${cards}</div>
+      </div>
+    `;
+  }).join('');
+  root.innerHTML = html || '<p class="text-slate-500 text-sm">Knockout fixtures not loaded yet. Admin: import via the admin panel.</p>';
+}
+
+// ── Standings tab ──────────────────────────────────────────────
+// Computes group standings from settled group matches in the cache.
+function renderStandings() {
+  const root = $('standings-list');
+  if (!root) return;
+  const ms = Array.from(matchesCache.values()).filter(m => m.stage === 'group');
+  if (ms.length === 0) {
+    root.innerHTML = '<p class="text-slate-500 text-sm">No group matches loaded.</p>';
+    return;
+  }
+
+  // Discover groups + their teams
+  const groups = {};
+  for (const m of ms) {
+    if (!m.group) continue;
+    groups[m.group] = groups[m.group] || { matches: [], teams: new Map() };
+    groups[m.group].matches.push(m);
+    if (m.homeTeam && m.homeTeam !== 'TBD') groups[m.group].teams.set(m.homeTeam, { team: m.homeTeam, flag: m.homeFlag });
+    if (m.awayTeam && m.awayTeam !== 'TBD') groups[m.group].teams.set(m.awayTeam, { team: m.awayTeam, flag: m.awayFlag });
+  }
+
+  const groupLetters = Object.keys(groups).sort();
+  const html = groupLetters.map(letter => {
+    const { matches, teams } = groups[letter];
+    // Init each team's row
+    const rows = new Map();
+    for (const [name, info] of teams.entries()) {
+      rows.set(name, { team: name, flag: info.flag, MP: 0, W: 0, D: 0, L: 0, GF: 0, GA: 0, GD: 0, Pts: 0 });
+    }
+    // Tally settled matches
+    for (const m of matches) {
+      if (!m.finalScore || m.status !== 'settled') continue;
+      const h = rows.get(m.homeTeam); const a = rows.get(m.awayTeam);
+      if (!h || !a) continue;
+      const hg = m.finalScore.home, ag = m.finalScore.away;
+      h.MP++; a.MP++;
+      h.GF += hg; h.GA += ag; a.GF += ag; a.GA += hg;
+      if (hg > ag) { h.W++; h.Pts += 3; a.L++; }
+      else if (hg < ag) { a.W++; a.Pts += 3; h.L++; }
+      else { h.D++; a.D++; h.Pts++; a.Pts++; }
+    }
+    for (const r of rows.values()) r.GD = r.GF - r.GA;
+    // Sort: Pts desc, GD desc, GF desc, alphabetical
+    const sorted = [...rows.values()].sort((x, y) =>
+      y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.team.localeCompare(y.team));
+
+    const rowsHtml = sorted.map((r, i) => `
+      <tr class="${i < 2 ? 'qualified-row' : ''}">
+        <td class="px-2 py-1">${i + 1}</td>
+        <td class="px-2 py-1 whitespace-nowrap">${r.flag || ''} ${teamLabel(r.team)}</td>
+        <td class="px-2 py-1 text-center">${r.MP}</td>
+        <td class="px-2 py-1 text-center">${r.W}</td>
+        <td class="px-2 py-1 text-center">${r.D}</td>
+        <td class="px-2 py-1 text-center">${r.L}</td>
+        <td class="px-2 py-1 text-center">${r.GF}</td>
+        <td class="px-2 py-1 text-center">${r.GA}</td>
+        <td class="px-2 py-1 text-center">${r.GD > 0 ? '+' + r.GD : r.GD}</td>
+        <td class="px-2 py-1 text-center font-semibold">${r.Pts}</td>
+      </tr>
+    `).join('');
+    return `
+      <div class="standings-group">
+        <h3 class="font-semibold mt-4 mb-2">Group ${letter}</h3>
+        <div class="overflow-x-auto">
+        <table class="standings-table w-full text-sm">
+          <thead class="text-xs text-slate-500">
+            <tr>
+              <th class="px-2 py-1 text-left">#</th>
+              <th class="px-2 py-1 text-left">Team 隊伍</th>
+              <th class="px-2 py-1">MP</th>
+              <th class="px-2 py-1">W</th>
+              <th class="px-2 py-1">D</th>
+              <th class="px-2 py-1">L</th>
+              <th class="px-2 py-1">GF</th>
+              <th class="px-2 py-1">GA</th>
+              <th class="px-2 py-1">GD</th>
+              <th class="px-2 py-1">Pts</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+  root.innerHTML = html;
+}
+
+// Hook bracket + standings into the matches subscription so they
+// re-render whenever matchesCache changes.
+const _origRenderMatches = renderMatches;
+renderMatches = function (matches) {
+  _origRenderMatches(matches);
+  renderBracket();
+  renderStandings();
+};
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg) {

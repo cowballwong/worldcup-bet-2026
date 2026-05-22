@@ -99,3 +99,30 @@
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
 
 #toast.show { display: block; }
+
+/* Bracket */
+.bracket-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+/* Standings */
+.standings-table {
+  border-collapse: collapse;
+}
+.standings-table thead th {
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+.standings-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+}
+.standings-table tbody tr.qualified-row {
+  background: #f0fdf4;
+}
+.standings-table tbody tr.qualified-row td:first-child {
+  color: #15803d;
+  font-weight: 700;
+}
