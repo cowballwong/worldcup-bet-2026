@@ -34,7 +34,10 @@ service cloud.firestore {
     // - Update: only admins (to adjust balances) or the server-side
     //   settlement path. Players CANNOT edit their own balance directly.
     match /users/{uid} {
-      allow read: if isSignedIn();
+      // PUBLIC read: friends game with no sensitive data (just displayName +
+      // balance). Lets the LillyRose dashboard server-side fetch the
+      // leaderboard via Firestore REST without auth tokens.
+      allow read: if true;
       allow create: if isSelf(uid)
                     && request.resource.data.balance == 1000
                     && request.resource.data.email == request.auth.token.email;
