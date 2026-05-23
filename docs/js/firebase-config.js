@@ -17,3 +17,10 @@ export const APP_CONFIG = {
   maxStake: 200,
   betCutoffMinutes: 0,  // 0 = closes exactly at kickoff
 };
+
+// The Odds API (the-odds-api.com) — paste your free-tier key here.
+// 500 requests/month free; each odds refresh = 1 request.
+// Get one at https://the-odds-api.com (signup is 1 minute, no credit card).
+// Leave as "" until you have one — the "Refresh odds" admin button
+// will tell you when the key is missing.
+export const ODDS_API_KEY = "";

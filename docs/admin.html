@@ -39,6 +39,7 @@
     <button class="tab-btn px-3 py-2 font-medium text-rose-700 border-b-2 border-rose-700 whitespace-nowrap" data-tab="fixtures">⚽️ Fixtures</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="users">👥 Users</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="lillyrose">🤖 LillyRose</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="odds">📈 Refresh odds</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="bulk-import">📥 Import</button>
   </div>
 
@@ -71,6 +72,18 @@
     </div>
     <p id="lr-status" class="text-sm"></p>
     <div id="lr-bets-summary" class="mt-3 text-sm text-slate-500"></div>
+  </section>
+
+  <section id="tab-odds" class="tab-panel hidden">
+    <h2 class="font-semibold mb-2">Refresh odds from The Odds API · 由 The Odds API 拉最新賠率</h2>
+    <p class="text-sm text-slate-600 mb-2">Free tier: 500 requests/month. One refresh = 1 request. Pulls all available WC2026 matches, takes the median odds across UK + EU bookmakers, matches them to your fixtures by team name + kickoff time, and shows a preview. You confirm before write.</p>
+    <p class="text-xs text-slate-500 mb-3">Need a key? Sign up at <a class="underline text-rose-700" href="https://the-odds-api.com" target="_blank">the-odds-api.com</a> (no credit card), then paste it into <code>docs/js/firebase-config.js</code>'s <code>ODDS_API_KEY</code>.</p>
+    <div class="flex flex-wrap gap-2 mb-3">
+      <button id="odds-preview" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded text-sm">Preview updates 預覽</button>
+      <button id="odds-apply"   class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-sm hidden">Apply to Firestore ✏️</button>
+      <span id="odds-status" class="text-sm self-center"></span>
+    </div>
+    <div id="odds-preview-list" class="space-y-1 text-xs font-mono"></div>
   </section>
 
   <section id="tab-bulk-import" class="tab-panel hidden">

@@ -8,9 +8,10 @@ import {
   getDocs, orderBy, onSnapshot, writeBatch, serverTimestamp, increment, addDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, ODDS_API_KEY } from "./firebase-config.js";
 import { settleBetsForMatch, MARKETS } from "./markets.js";
 import { TEAM_ZH } from "./teams-zh.js";
+import { fetchAndPair } from "./odds-refresh.js";
 
 const LILLYROSE_UID = 'lillyrose-ai';
 const LILLYROSE_NAME = 'LillyRose 🤖';
@@ -458,6 +459,81 @@ $('lr-generate')?.addEventListener('click', async () => {
 function setLR(msg, isErr) {
   $('lr-status').textContent = msg;
   $('lr-status').className = `text-sm ${isErr ? 'text-rose-600' : 'text-emerald-700'}`;
+}
+
+// ── Refresh odds (The Odds API) ────────────────────────────────
+let pendingOddsUpdates = null;
+
+$('odds-preview')?.addEventListener('click', async () => {
+  setOddsStatus('Fetching odds…');
+  pendingOddsUpdates = null;
+  $('odds-apply').classList.add('hidden');
+  try {
+    if (!ODDS_API_KEY) {
+      setOddsStatus('Missing ODDS_API_KEY. See firebase-config.js.', true);
+      return;
+    }
+    // Pull all matches as the candidate set
+    const snap = await getDocs(collection(db, 'matches'));
+    const fixtures = [];
+    snap.forEach(d => fixtures.push({ id: d.id, ...d.data() }));
+    const { updates, unmatched, usage, totalEventsFromApi } =
+      await fetchAndPair(ODDS_API_KEY, fixtures);
+    pendingOddsUpdates = updates;
+    const head = `API returned ${totalEventsFromApi} events · matched ${updates.length} · unmatched ${unmatched.length}`;
+    const tail = `(API requests remaining: ${usage.remaining ?? '?'})`;
+    setOddsStatus(`${head} ${tail}`, false);
+    const root = $('odds-preview-list');
+    const lines = updates.slice(0, 200).map(u => {
+      const o = u.oldOdds || {};
+      const n = u.newOdds;
+      const diff = (k) => {
+        const a = o[k], b = n[k];
+        if (b == null) return '<span class="text-slate-400">—</span>';
+        if (a == null) return `<span class="text-emerald-700">${b}</span>`;
+        if (Math.abs((a - b) / a) < 0.01) return `<span class="text-slate-400">${b}</span>`;
+        return `<span class="${b < a ? 'text-rose-600' : 'text-emerald-700'}">${a} → ${b}</span>`;
+      };
+      return `<div class="flex justify-between gap-3 border-b py-1">
+        <span class="truncate flex-1">${u.label}</span>
+        <span>H ${diff('home')} · D ${diff('draw')} · A ${diff('away')} · O2.5 ${diff('over25')} · U2.5 ${diff('under25')}</span>
+      </div>`;
+    });
+    if (unmatched.length) {
+      lines.push(`<div class="mt-3 text-slate-500">Unmatched (no fixture found): ${unmatched.map(x => x.home + ' vs ' + x.away).join(' · ')}</div>`);
+    }
+    root.innerHTML = lines.join('') || '<div class="text-slate-500">No updates available.</div>';
+    if (updates.length > 0) $('odds-apply').classList.remove('hidden');
+  } catch (e) {
+    console.error(e);
+    setOddsStatus(`Failed: ${e.message}`, true);
+  }
+});
+
+$('odds-apply')?.addEventListener('click', async () => {
+  if (!pendingOddsUpdates || pendingOddsUpdates.length === 0) return;
+  setOddsStatus('Applying…');
+  try {
+    const batch = writeBatch(db);
+    for (const u of pendingOddsUpdates) {
+      batch.update(doc(db, 'matches', u.matchId), {
+        odds: u.newOdds,
+        oddsUpdatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    setOddsStatus(`Applied to ${pendingOddsUpdates.length} matches.`, false);
+    pendingOddsUpdates = null;
+    $('odds-apply').classList.add('hidden');
+  } catch (e) {
+    console.error(e);
+    setOddsStatus(`Apply failed: ${e.message}`, true);
+  }
+});
+
+function setOddsStatus(msg, isErr) {
+  $('odds-status').textContent = msg;
+  $('odds-status').className = `text-sm self-center ${isErr ? 'text-rose-600' : 'text-emerald-700'}`;
 }
 
 // ── Theme toggle ───────────────────────────────────────────────
