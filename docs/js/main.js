@@ -470,11 +470,22 @@ function renderLeaderboard(rows) {
     return;
   }
   const medals = ['🥇', '🥈', '🥉'];
-  root.innerHTML = rows.map((r, i) => {
+  // Competition (1224) ranking: tied players share the lowest rank, the
+  // next non-tied player skips. So 1000 / 1000 / 950 / 900 → 1 / 1 / 3 / 4.
+  let rank = 0;
+  let prevBalance = null;
+  const ranked = rows.map((r, i) => {
+    if (r.balance !== prevBalance) rank = i + 1;
+    prevBalance = r.balance;
+    return { ...r, rank };
+  });
+
+  root.innerHTML = ranked.map(r => {
     const isMe = currentUser && r.uid === currentUser.uid;
+    const medal = medals[r.rank - 1] || r.rank;
     return `
       <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
-        <span class="rank-medal">${medals[i] || (i+1)}</span>
+        <span class="rank-medal">${medal}</span>
         <span class="flex-1 truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
         <span class="font-semibold">${r.balance} pts</span>
       </div>
