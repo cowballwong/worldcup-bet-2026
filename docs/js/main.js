@@ -29,6 +29,29 @@ let unsubMyBets = null;
 // ── DOM ────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
+// Twemoji parser: replaces unicode emoji (esp. flags) with image tags so
+// Windows browsers can render them. No-op if Twemoji didn't load.
+function parseEmoji(rootEl) {
+  if (window.twemoji && rootEl) {
+    try { window.twemoji.parse(rootEl, { folder: 'svg', ext: '.svg' }); } catch (e) {}
+  }
+}
+// Auto-parse every dynamic DOM addition (covers all the render*() functions
+// without needing a parseEmoji() call inside each one).
+function _installEmojiObserver() {
+  if (!window.twemoji) { setTimeout(_installEmojiObserver, 200); return; }
+  parseEmoji(document.body);
+  const mo = new MutationObserver(muts => {
+    for (const m of muts) {
+      for (const n of m.addedNodes) {
+        if (n.nodeType === 1) parseEmoji(n);
+      }
+    }
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+}
+_installEmojiObserver();
+
 // ── Theme toggle ───────────────────────────────────────────────
 const themeBtn = $('theme-btn');
 function applyTheme(t) {

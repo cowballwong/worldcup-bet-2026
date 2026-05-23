@@ -3,6 +3,19 @@
 #bet-modal.flex,
 #match-modal.flex { display: flex; }
 
+/* Twemoji — keep emoji-as-images aligned with surrounding text. Critical
+   for Windows browsers which lack colour flag glyphs in the default fonts. */
+img.emoji {
+  height: 1em;
+  width: auto;
+  margin: 0 0.05em;
+  vertical-align: -0.125em;
+}
+.match-row .team .flag img.emoji {
+  height: 1em;
+  display: inline-block;
+}
+
 /* ─── Match card: flag-prominent 3-column layout ─── */
 .match-row {
   display: grid;

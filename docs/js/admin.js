@@ -20,6 +20,23 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const $ = id => document.getElementById(id);
 
+// Twemoji auto-parse for emoji rendering on Windows
+function _installEmojiObserver() {
+  if (!window.twemoji) { setTimeout(_installEmojiObserver, 200); return; }
+  try { window.twemoji.parse(document.body, { folder: 'svg', ext: '.svg' }); } catch (e) {}
+  const mo = new MutationObserver(muts => {
+    for (const m of muts) {
+      for (const n of m.addedNodes) {
+        if (n.nodeType === 1) {
+          try { window.twemoji.parse(n, { folder: 'svg', ext: '.svg' }); } catch (e) {}
+        }
+      }
+    }
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+}
+_installEmojiObserver();
+
 let currentUser = null;
 let unsubAdminMatches = null;
 
