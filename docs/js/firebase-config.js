@@ -23,4 +23,4 @@ export const APP_CONFIG = {
 // Get one at https://the-odds-api.com (signup is 1 minute, no credit card).
 // Leave as "" until you have one — the "Refresh odds" admin button
 // will tell you when the key is missing.
-export const ODDS_API_KEY = "";
+export const ODDS_API_KEY = "14e72876974b98406e47409b1444d6f2";
