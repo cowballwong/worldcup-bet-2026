@@ -187,6 +187,7 @@ function renderAIBets(bets) {
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
+    try { localStorage.setItem('wc-tab', tab); } catch (e) {}  // remember across refresh
     document.querySelectorAll('.tab-btn').forEach(b => {
       const active = b.dataset.tab === tab;
       b.classList.toggle('text-emerald-700', active);
@@ -198,6 +199,15 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     $(`tab-${tab}`).classList.remove('hidden');
   });
 });
+
+// Restore the last-viewed tab after a refresh (was always snapping back to home).
+(function restoreTab() {
+  let saved;
+  try { saved = localStorage.getItem('wc-tab'); } catch (e) {}
+  if (!saved) return;
+  const btn = document.querySelector(`.tab-btn[data-tab="${saved}"]`);
+  if (btn) btn.click();
+})();
 
 // ── Matches: subscribe + render ────────────────────────────────
 function subscribeMatches() {
