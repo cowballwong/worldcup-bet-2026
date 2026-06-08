@@ -22,10 +22,11 @@ export const MARKETS = {
   '1x2': {
     label: 'Match result · 1X2 全場勝和負',
     selections(match) {
+      const o = match.odds || {};
       return [
-        { code: 'home', label: teamBi(match.homeTeam, 'win', '勝', match.homeFlag), odds: match.odds.home },
-        { code: 'draw', label: bi('Draw', '和波'),                                   odds: match.odds.draw },
-        { code: 'away', label: teamBi(match.awayTeam, 'win', '勝', match.awayFlag), odds: match.odds.away },
+        { code: 'home', label: teamBi(match.homeTeam, 'win', '勝', match.homeFlag), odds: o.home ?? '—' },
+        { code: 'draw', label: bi('Draw', '和波'),                                   odds: o.draw ?? '—' },
+        { code: 'away', label: teamBi(match.awayTeam, 'win', '勝', match.awayFlag), odds: o.away ?? '—' },
       ];
     },
     evaluate(bet, match) {
@@ -70,7 +71,7 @@ export const MARKETS = {
     label: 'Halftime result · 半場勝和負',
     selections(match) {
       // Use a flat 2.6/2.1/3.4 unless admin set per-match HT odds.
-      const o = match.odds.ht || { home: 2.50, draw: 2.10, away: 3.40 };
+      const o = (match.odds || {}).ht || { home: 2.50, draw: 2.10, away: 3.40 };
       return [
         { code: 'home', label: teamBi(match.homeTeam, 'lead HT', '半場領先', match.homeFlag), odds: o.home },
         { code: 'draw', label: bi('Level at HT', '半場和波'),                                  odds: o.draw },
@@ -90,9 +91,10 @@ export const MARKETS = {
   'ou25': {
     label: 'Over/Under 2.5 · 入球大細',
     selections(match) {
+      const o = match.odds || {};
       return [
-        { code: 'over',  label: bi('Over 2.5 goals',  '大 (3 球或以上)'),  odds: match.odds.over25 },
-        { code: 'under', label: bi('Under 2.5 goals', '細 (2 球或以下)'), odds: match.odds.under25 },
+        { code: 'over',  label: bi('Over 2.5 goals',  '大 (3 球或以上)'),  odds: o.over25 ?? '—' },
+        { code: 'under', label: bi('Under 2.5 goals', '細 (2 球或以下)'), odds: o.under25 ?? '—' },
       ];
     },
     evaluate(bet, match) {
@@ -109,9 +111,10 @@ export const MARKETS = {
   'btts': {
     label: 'Both teams to score · 兩隊入波',
     selections(match) {
+      const o = match.odds || {};
       return [
-        { code: 'yes', label: bi('Yes — both score',          '係 — 兩隊都入波'), odds: match.odds.btts_yes },
-        { code: 'no',  label: bi('No — at least one zero',    '否 — 至少一隊零蛋'), odds: match.odds.btts_no },
+        { code: 'yes', label: bi('Yes — both score',          '係 — 兩隊都入波'), odds: o.btts_yes ?? '—' },
+        { code: 'no',  label: bi('No — at least one zero',    '否 — 至少一隊零蛋'), odds: o.btts_no ?? '—' },
       ];
     },
     evaluate(bet, match) {

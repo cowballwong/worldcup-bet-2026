@@ -119,6 +119,7 @@ img.emoji {
 .bet-selection-row .odds-pill {
   font-weight: 600;
   background: #e2e8f0;
+  color: #0f172a;
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 13px;
@@ -126,6 +127,27 @@ img.emoji {
 .bet-selection-row.is-selected .odds-pill {
   background: #0d9488;
   color: white;
+}
+/* Night mode: the bet-option rows + odds pills had no dark override, so on the
+   dark modal the labels/odds lost contrast and looked invisible. Fix: */
+[data-theme="dark"] .bet-selection-row {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .bet-selection-row:hover { background: #334155; }
+[data-theme="dark"] .bet-selection-row.is-selected {
+  background: #0f3b36;
+  border-color: #14b8a6;
+}
+[data-theme="dark"] .bet-selection-row .team-en { color: #e2e8f0; }
+[data-theme="dark"] .bet-selection-row .odds-pill {
+  background: #334155;
+  color: #f1f5f9;
+}
+[data-theme="dark"] .bet-selection-row.is-selected .odds-pill {
+  background: #14b8a6;
+  color: #04201c;
 }
 
 .leaderboard-row {

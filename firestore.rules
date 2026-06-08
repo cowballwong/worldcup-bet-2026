@@ -4,10 +4,16 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Helper: is the requester an admin?
+    // GUARD with exists() — if config/admin_emails is missing or malformed,
+    // get(...).data.emails throws, which makes EVERY rule that calls isAdmin()
+    // (even via `|| isAdmin()` / `isAdmin() || …`) evaluate to an error → permission
+    // denied. That bug blocked players from placing bets ("Missing or insufficient
+    // permissions") because the balance-update rule evaluated isAdmin() first.
     function isAdmin() {
-      return request.auth != null &&
-             request.auth.token.email in
-               get(/databases/$(database)/documents/config/admin_emails).data.emails;
+      return request.auth != null
+             && exists(/databases/$(database)/documents/config/admin_emails)
+             && request.auth.token.email in
+                get(/databases/$(database)/documents/config/admin_emails).data.emails;
     }
 
     function isSignedIn() {
@@ -41,7 +47,20 @@ service cloud.firestore {
       allow create: if isSelf(uid)
                     && request.resource.data.balance == 1000
                     && request.resource.data.email == request.auth.token.email;
-      allow update: if isAdmin();
+      // Admins can adjust anything (balance corrections, settlement credits).
+      // A player may update ONLY their own balance, and ONLY to DECREASE it by a
+      // valid stake (10-200) — i.e. to pay for a bet. They cannot raise their own
+      // balance (winnings are credited admin/settlement-side) or change other fields.
+      // Player self-decrease path is checked FIRST so a normal bet never depends
+      // on isAdmin() (which needs the config doc). isAdmin() is the fallback.
+      allow update: if (isSelf(uid)
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance'])
+                        && request.resource.data.balance is number
+                        && request.resource.data.balance >= 0
+                        && request.resource.data.balance < resource.data.balance
+                        && (resource.data.balance - request.resource.data.balance) >= 10
+                        && (resource.data.balance - request.resource.data.balance) <= 200)
+                    || isAdmin();
       allow delete: if isAdmin();
     }
 
