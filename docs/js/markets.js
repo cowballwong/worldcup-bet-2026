@@ -70,8 +70,10 @@ export const MARKETS = {
   'ht1x2': {
     label: 'Halftime result · 半場勝和負',
     selections(match) {
-      // Use a flat 2.6/2.1/3.4 unless admin set per-match HT odds.
-      const o = (match.odds || {}).ht || { home: 2.50, draw: 2.10, away: 3.40 };
+      // Per-match HT odds. Admin override wins; otherwise DERIVE from this
+      // match's full-time 1X2 odds (so every match differs) — at halftime a
+      // level score is much more likely and leads are less established.
+      const o = (match.odds || {}).ht || htOddsFromFT(match.odds || {});
       return [
         { code: 'home', label: teamBi(match.homeTeam, 'lead HT', '半場領先', match.homeFlag), odds: o.home },
         { code: 'draw', label: bi('Level at HT', '半場和波'),                                  odds: o.draw },
@@ -127,6 +129,30 @@ export const MARKETS = {
     }
   },
 };
+
+
+// Derive plausible per-match HALFTIME 1X2 odds from the full-time 1X2 odds.
+// At HT a level score is far more common and leads aren't yet established, so we
+// pull a big chunk of each side's win-probability into the draw. Result varies
+// per match (a strong favourite is still likelier to lead at HT than an underdog).
+function htOddsFromFT(odds) {
+  const ftH = Number(odds.home) || 2.5;
+  const ftA = Number(odds.away) || 2.8;
+  const pH = 1 / ftH, pA = 1 / ftA;                    // FT win-implied strengths
+  const ratio = pH / (pH + pA);                        // home's share of "someone leads"
+  // Real-world halftime baseline: a level score is most common. Even matches are
+  // a touch MORE likely to be level at HT; lopsided ones slightly less (the
+  // favourite leads more often). So vary the draw with how even the match is.
+  const evenness = 1 - Math.abs(ratio - 0.5) * 2;      // 1 = even, 0 = lopsided
+  const drawProb = 0.42 + 0.07 * evenness;             // ~0.42–0.49
+  const leadProb = 1 - drawProb;
+  const hShare = 0.5 + (ratio - 0.5) * 0.7;            // compress toward 50/50
+  const pHTh = leadProb * hShare;
+  const pHTa = leadProb * (1 - hShare);
+  const MARGIN = 1.10;                                 // bookish overround
+  const toOdds = p => Math.max(1.05, Math.round((1 / (p * MARGIN)) * 100) / 100);
+  return { home: toOdds(pHTh), draw: toOdds(drawProb), away: toOdds(pHTa) };
+}
 
 
 // Simple exact-score odds derived from a Poisson-ish heuristic.
