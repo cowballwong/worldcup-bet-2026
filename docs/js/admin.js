@@ -145,6 +145,7 @@ function openMatchModal(matchId, m) {
   $('m-away-flag').value = m?.awayFlag || '';
   $('m-kickoff').value = m?.kickoffISO || '';
   $('m-venue').value = m?.venue || '';
+  $('m-broadcaster').value = m?.broadcaster || '';
   $('m-odds-home').value = m?.odds?.home ?? '';
   $('m-odds-draw').value = m?.odds?.draw ?? '';
   $('m-odds-away').value = m?.odds?.away ?? '';
@@ -186,6 +187,7 @@ function readMatchForm() {
     awayFlag: $('m-away-flag').value.trim(),
     kickoffISO: $('m-kickoff').value.trim(),
     venue: $('m-venue').value.trim(),
+    broadcaster: $('m-broadcaster').value.trim(),
     odds: {
       home: parseFloatOrNull($('m-odds-home').value),
       draw: parseFloatOrNull($('m-odds-draw').value),

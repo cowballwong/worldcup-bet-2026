@@ -30,7 +30,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-002",
@@ -53,7 +54,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-003",
@@ -76,7 +78,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-004",
@@ -99,7 +102,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-005",
@@ -122,7 +126,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-006",
@@ -145,7 +150,8 @@
         "btts_no": 2.1
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-007",
@@ -168,7 +174,8 @@
         "btts_no": 1.8
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-008",
@@ -191,7 +198,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-009",
@@ -214,7 +222,8 @@
         "btts_no": 1.7
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-010",
@@ -237,7 +246,8 @@
         "btts_no": 2.1
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-011",
@@ -260,7 +270,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-012",
@@ -283,7 +294,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-013",
@@ -306,7 +318,8 @@
         "btts_no": 1.7
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-014",
@@ -329,7 +342,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-015",
@@ -352,7 +366,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-016",
@@ -375,7 +390,8 @@
         "btts_no": 1.85
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-017",
@@ -398,7 +414,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-018",
@@ -421,7 +438,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-019",
@@ -444,7 +462,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-020",
@@ -467,7 +486,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-021",
@@ -490,7 +510,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-022",
@@ -513,7 +534,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-023",
@@ -536,7 +558,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-024",
@@ -559,7 +582,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-025",
@@ -582,7 +606,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-026",
@@ -605,7 +630,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-027",
@@ -628,7 +654,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-029",
@@ -651,7 +678,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-028",
@@ -674,7 +702,8 @@
         "btts_no": 1.6
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-030",
@@ -697,7 +726,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-031",
@@ -720,7 +750,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-032",
@@ -743,7 +774,8 @@
         "btts_no": 1.85
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-033",
@@ -766,7 +798,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-034",
@@ -789,7 +822,8 @@
         "btts_no": 1.8
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-035",
@@ -812,7 +846,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-036",
@@ -835,7 +870,8 @@
         "btts_no": 1.85
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-037",
@@ -858,7 +894,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-038",
@@ -881,7 +918,8 @@
         "btts_no": 1.65
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-039",
@@ -904,7 +942,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-040",
@@ -927,7 +966,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-041",
@@ -950,7 +990,8 @@
         "btts_no": 1.85
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-042",
@@ -973,7 +1014,8 @@
         "btts_no": 1.9
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-043",
@@ -996,7 +1038,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-044",
@@ -1019,7 +1062,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-045",
@@ -1042,7 +1086,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-046",
@@ -1065,7 +1110,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-047",
@@ -1088,7 +1134,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-048",
@@ -1111,7 +1158,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-049",
@@ -1134,7 +1182,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-050",
@@ -1157,7 +1206,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-051",
@@ -1180,7 +1230,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-052",
@@ -1203,7 +1254,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-053",
@@ -1226,7 +1278,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-054",
@@ -1249,7 +1302,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "BBC"
     },
     {
       "id": "WC26-055",
@@ -1272,7 +1326,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-056",
@@ -1295,7 +1350,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-057",
@@ -1318,7 +1374,8 @@
         "btts_no": 2.0
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-058",
@@ -1341,7 +1398,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": "ITV"
     },
     {
       "id": "WC26-R32-01",
@@ -1366,7 +1424,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-02",
@@ -1391,7 +1450,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-03",
@@ -1416,7 +1476,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-04",
@@ -1441,7 +1502,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-05",
@@ -1466,7 +1528,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-06",
@@ -1491,7 +1554,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-07",
@@ -1516,7 +1580,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-08",
@@ -1541,7 +1606,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-09",
@@ -1566,7 +1632,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-10",
@@ -1591,7 +1658,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-11",
@@ -1616,7 +1684,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-12",
@@ -1641,7 +1710,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-13",
@@ -1666,7 +1736,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-14",
@@ -1691,7 +1762,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-15",
@@ -1716,7 +1788,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R32-16",
@@ -1741,7 +1814,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-1",
@@ -1766,7 +1840,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-2",
@@ -1791,7 +1866,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-3",
@@ -1816,7 +1892,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-4",
@@ -1841,7 +1918,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-5",
@@ -1866,7 +1944,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-6",
@@ -1891,7 +1970,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-7",
@@ -1916,7 +1996,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-R16-8",
@@ -1941,7 +2022,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-QF-1",
@@ -1966,7 +2048,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-QF-2",
@@ -1991,7 +2074,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-QF-3",
@@ -2016,7 +2100,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-QF-4",
@@ -2041,7 +2126,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-SF-1",
@@ -2066,7 +2152,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-SF-2",
@@ -2091,7 +2178,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-3RD",
@@ -2116,7 +2204,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     },
     {
       "id": "WC26-FINAL",
@@ -2141,7 +2230,8 @@
         "btts_no": 1.95
       },
       "finalScore": null,
-      "halftimeScore": null
+      "halftimeScore": null,
+      "broadcaster": ""
     }
   ]
 }

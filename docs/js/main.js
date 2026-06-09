@@ -271,7 +271,7 @@ function renderMatches(matches) {
             ${formatTeam(m.awayTeam, m.awaySlot)}
           </div>
         </div>
-        ${m.venue ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue}</div>` : ''}
+        ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
       </div>
     `;
   }).join('');
