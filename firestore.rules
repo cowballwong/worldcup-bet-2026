@@ -44,9 +44,12 @@ service cloud.firestore {
       // balance). Lets the LillyRose dashboard server-side fetch the
       // leaderboard via Firestore REST without auth tokens.
       allow read: if true;
-      allow create: if isSelf(uid)
-                    && request.resource.data.balance == 1000
-                    && request.resource.data.email == request.auth.token.email;
+      // Self-create on first sign-in (starting balance only), OR admin seeding
+      // a user doc (e.g. the LillyRose AI player, whose uid != admin's uid).
+      allow create: if (isSelf(uid)
+                        && request.resource.data.balance == 1000
+                        && request.resource.data.email == request.auth.token.email)
+                    || isAdmin();
       // Admins can adjust anything (balance corrections, settlement credits).
       // A player may update ONLY their own balance, and ONLY to DECREASE it by a
       // valid stake (10-200) — i.e. to pay for a bet. They cannot raise their own
