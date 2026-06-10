@@ -422,3 +422,12 @@ img.emoji {
 [data-theme="dark"] .champ-team:hover:not(.is-locked) { border-color: #a16207; background: #422006; }
 [data-theme="dark"] .champ-team.is-picked { background: #422006; border-color: #f59e0b; }
 [data-theme="dark"] .champ-zh { color: #94a3b8; }
+
+/* champion odds + payout on each team button */
+.champ-odds { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; padding-left: 0.4rem; }
+.champ-o { font-size: 0.72rem; color: #64748b; }
+.champ-pay { font-size: 0.78rem; font-weight: 700; color: #b45309; }
+.champ-team.is-picked .champ-pay { color: #92400e; }
+.champ-team .champ-check { position: absolute; top: 3px; right: 5px; font-size: 0.7rem; }
+[data-theme="dark"] .champ-o { color: #94a3b8; }
+[data-theme="dark"] .champ-pay { color: #fbbf24; }

@@ -73,6 +73,18 @@
       <button id="champ-reopen" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded text-sm">Re-open picks</button>
     </div>
     <p id="champ-status" class="text-sm"></p>
+
+    <div class="mt-4 border-t pt-3">
+      <h3 class="text-sm font-semibold mb-1">Outright odds · 奪冠賠率</h3>
+      <p class="text-xs text-slate-500 mb-2">Payout = <b>100 × locked odds</b>. App ships with sensible defaults; press below to write them to Firestore (so you can tweak), or edit the JSON and save. Odds lock on each user's pick — editing here never changes existing predictions.</p>
+      <div class="flex flex-wrap gap-2 items-center mb-2">
+        <button id="champ-seed-odds" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-sm">Seed default odds</button>
+        <button id="champ-save-odds" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded text-sm">Save edited odds</button>
+        <span id="champ-odds-status" class="text-sm self-center"></span>
+      </div>
+      <textarea id="champ-odds-json" class="w-full h-40 border border-slate-300 rounded p-2 font-mono text-xs" placeholder='{ "base": 100, "odds": { "Brazil": 6.5, ... } }'></textarea>
+    </div>
+
     <div class="mt-4">
       <h3 class="text-sm font-semibold mb-1">Picks so far · 大家點揀</h3>
       <div id="champ-breakdown" class="text-sm text-slate-600">Loading…</div>

@@ -11,6 +11,7 @@ import {
 import { firebaseConfig, APP_CONFIG } from "./firebase-config.js";
 import { MARKETS, getMarketLabel, getSelectionLabel } from "./markets.js";
 import { teamLabel, TEAM_ZH } from "./teams-zh.js";
+import { championOddsFor, championPayout, CHAMPION_BASE } from "./champion-odds.js";
 
 // ── Firebase init ──────────────────────────────────────────────
 const app = initializeApp(firebaseConfig);
@@ -27,8 +28,10 @@ let unsubLeaderboard = null;
 let unsubMyBets = null;
 let unsubChampionConfig = null;
 let unsubMyChampion = null;
+let unsubChampionOdds = null;
 let championConfig = null;   // { champion, championSettled }
-let myChampion = null;       // { pick, pickZh, ... }
+let myChampion = null;       // { pick, pickZh, lockedOdds, potential, ... }
+let championOdds = null;     // { base, odds:{team:number} } override from config (else defaults)
 
 // ── DOM ────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -133,6 +136,7 @@ onAuthStateChanged(auth, async (user) => {
   subscribeAIBets();
   subscribeChampionConfig();
   subscribeMyChampion();
+  subscribeChampionOdds();
 });
 
 // ── LillyRose AI bets subscription ─────────────────────────────
@@ -833,6 +837,18 @@ function subscribeMyChampion() {
   }, () => { myChampion = null; renderChampion(); });
 }
 
+function subscribeChampionOdds() {
+  if (unsubChampionOdds) unsubChampionOdds();
+  unsubChampionOdds = onSnapshot(doc(db, 'config', 'champion_odds'), snap => {
+    championOdds = snap.exists() ? snap.data() : null;
+    renderChampion();
+  }, () => { championOdds = null; renderChampion(); });
+}
+
+// Odds override map + base from config (falls back to bundled defaults).
+function oddsMap() { return (championOdds && championOdds.odds) || null; }
+function oddsBase() { return (championOdds && Number.isFinite(championOdds.base)) ? championOdds.base : CHAMPION_BASE; }
+
 // Earliest kick-off across all loaded matches = the pick deadline.
 function championCutoffMs() {
   let earliest = Infinity;
@@ -870,11 +886,17 @@ function renderChampion() {
   const locked = settled || (Number.isFinite(cutoff) && Date.now() >= cutoff);
   const myPick = myChampion && myChampion.pick;
 
+  // Locked potential from the user's own pick (stored at pick time), with a
+  // graceful fallback to a freshly-computed value for older picks.
+  const myPotential = (myChampion && Number.isFinite(myChampion.potential))
+    ? myChampion.potential
+    : (myPick ? championPayout(myPick, oddsMap(), oddsBase()) : 0);
+
   // ── Status banner ──
   if (settled && champion) {
     const flag = flags[champion] || '🏆';
     if (myPick && myPick === champion) {
-      statusEl.innerHTML = `<div class="champ-banner win">🏆 冠軍係 <b>${flag} ${teamPlainSafe(champion)}</b> — 你估中喇!<b>+500 分</b> 🎉</div>`;
+      statusEl.innerHTML = `<div class="champ-banner win">🏆 冠軍係 <b>${flag} ${teamPlainSafe(champion)}</b> — 你估中喇!<b>+${myPotential} 分</b> 🎉</div>`;
     } else if (myPick) {
       statusEl.innerHTML = `<div class="champ-banner lose">🏆 冠軍係 <b>${flag} ${teamPlainSafe(champion)}</b>。你揀咗 ${teamPlainSafe(myPick)},今次估唔中 — 下屆再嚟!</div>`;
     } else {
@@ -882,8 +904,9 @@ function renderChampion() {
     }
   } else if (myPick) {
     const flag = flags[myPick] || '🏳️';
+    const odds = championOddsFor(myPick, oddsMap());
     const lockNote = locked ? ' · 已鎖定' : ' · 開賽前可改';
-    statusEl.innerHTML = `<div class="champ-banner pick">你嘅冠軍預測:<b>${flag} ${teamPlainSafe(myPick)}</b>${lockNote}</div>`;
+    statusEl.innerHTML = `<div class="champ-banner pick">你嘅冠軍預測:<b>${flag} ${teamPlainSafe(myPick)}</b> @ ${odds} → 估中 <b>+${myPotential} 分</b>${lockNote}</div>`;
   } else if (locked) {
     statusEl.innerHTML = `<div class="champ-banner">預測已截止(賽事已開始),你今屆冇揀冠軍。</div>`;
   } else {
@@ -898,15 +921,21 @@ function renderChampion() {
     return;
   }
   grid.classList.remove('hidden');
+  // Favourites first (shortest odds), so the risk/reward gradient is obvious.
+  const om = oddsMap(), base = oddsBase();
+  teams.sort((a, b) => championOddsFor(a, om) - championOddsFor(b, om) || a.localeCompare(b));
   grid.innerHTML = teams.map(t => {
     const flag = flags[t] || '🏳️';
     const zh = TEAM_ZH[t] || '';
     const sel = (t === myPick) ? 'is-picked' : '';
     const dis = locked ? 'is-locked' : '';
+    const odds = championOddsFor(t, om);
+    const pay = championPayout(t, om, base);
     return `
       <button class="champ-team ${sel} ${dis}" data-team="${escAttr(t)}" ${locked ? 'disabled' : ''}>
         <span class="champ-flag">${flag}</span>
         <span class="champ-name"><span class="champ-en">${escHtml(t)}</span>${zh ? `<span class="champ-zh">${escHtml(zh)}</span>` : ''}</span>
+        <span class="champ-odds"><span class="champ-o">@${odds}</span><span class="champ-pay">+${pay}</span></span>
         ${t === myPick ? '<span class="champ-check">✓</span>' : ''}
       </button>`;
   }).join('');
@@ -924,15 +953,19 @@ async function pickChampion(team) {
   const cutoff = championCutoffMs();
   if (Number.isFinite(cutoff) && Date.now() >= cutoff) return toast('預測已截止(賽事已開始)。');
   if (myChampion && myChampion.pick === team) return; // no-op re-pick
+  const lockedOdds = championOddsFor(team, oddsMap());
+  const potential = championPayout(team, oddsMap(), oddsBase());
   try {
     await setDoc(doc(db, 'champions', currentUser.uid), {
       userId: currentUser.uid,
       displayName: currentUserDoc?.displayName || (currentUser.email || '').split('@')[0],
       pick: team,
       pickZh: TEAM_ZH[team] || '',
+      lockedOdds,
+      potential,
       createdAt: serverTimestamp(),
     });
-    toast(`已揀 ${teamPlainSafe(team)} 做冠軍 👑`);
+    toast(`已揀 ${teamPlainSafe(team)} @ ${lockedOdds} · 估中 +${potential} 分 👑`);
   } catch (err) {
     console.error(err);
     toast(`揀冠軍失敗: ${err.message}`);

@@ -12,6 +12,7 @@ import { firebaseConfig, ODDS_API_KEY } from "./firebase-config.js";
 import { settleBetsForMatch, MARKETS } from "./markets.js";
 import { TEAM_ZH } from "./teams-zh.js";
 import { fetchAndPair } from "./odds-refresh.js";
+import { DEFAULT_CHAMPION_ODDS, CHAMPION_BASE, championPayout } from "./champion-odds.js";
 
 const LILLYROSE_UID = 'lillyrose-ai';
 const LILLYROSE_NAME = 'LillyRose 🤖';
@@ -484,8 +485,12 @@ function initChampionAdmin() {
     const root = $('champ-breakdown');
     if (!root) return;
     if (picks.length === 0) { root.innerHTML = '<span class="text-slate-500">No champion picks yet.</span>'; return; }
+    const cfg = championOddsCfg || {};
     root.innerHTML = `<div class="mb-2 text-slate-500">${picks.length} pick${picks.length === 1 ? '' : 's'} total</div>` +
-      sorted.map(([t, n]) => `<div class="flex justify-between border-b py-1"><span>${t} ${TEAM_ZH[t] || ''}</span><span class="font-semibold">${n}</span></div>`).join('');
+      sorted.map(([t, n]) => {
+        const pay = championPayout(t, cfg.odds, cfg.base);
+        return `<div class="flex justify-between border-b py-1"><span>${t} ${TEAM_ZH[t] || ''} <span class="text-slate-400">+${pay}</span></span><span class="font-semibold">${n}</span></div>`;
+      }).join('');
   }, err => {
     const root = $('champ-breakdown');
     if (root) root.innerHTML = `<span class="text-rose-600">Failed: ${err.message}</span>`;
@@ -498,6 +503,45 @@ function initChampionAdmin() {
       if (s.data().championSettled) setChamp(`Currently SETTLED on ${s.data().champion}. Re-running is safe.`, false);
     }
   }).catch(() => {});
+
+  // Load current odds config into the editor (or show defaults as a starting point).
+  getDoc(doc(db, 'config', 'champion_odds')).then(s => {
+    const ta = $('champ-odds-json');
+    if (!ta) return;
+    const cfg = s.exists() ? s.data() : { base: CHAMPION_BASE, odds: DEFAULT_CHAMPION_ODDS };
+    ta.value = JSON.stringify(cfg, null, 2);
+    championOddsCfg = cfg;
+  }).catch(() => {});
+}
+
+let championOddsCfg = null;  // { base, odds } cached for settlement fallback
+
+$('champ-seed-odds')?.addEventListener('click', async () => {
+  try {
+    const cfg = { base: CHAMPION_BASE, odds: DEFAULT_CHAMPION_ODDS };
+    await setDoc(doc(db, 'config', 'champion_odds'), cfg, { merge: false });
+    championOddsCfg = cfg;
+    if ($('champ-odds-json')) $('champ-odds-json').value = JSON.stringify(cfg, null, 2);
+    setOddsCfgStatus(`Seeded default odds for ${Object.keys(DEFAULT_CHAMPION_ODDS).length} teams (base ${CHAMPION_BASE}).`, false);
+  } catch (e) { setOddsCfgStatus(`Failed: ${e.message}`, true); }
+});
+
+$('champ-save-odds')?.addEventListener('click', async () => {
+  let cfg;
+  try { cfg = JSON.parse($('champ-odds-json').value); }
+  catch (e) { return setOddsCfgStatus(`Invalid JSON: ${e.message}`, true); }
+  if (!cfg || typeof cfg.odds !== 'object') return setOddsCfgStatus('Expected { base, odds: {...} }.', true);
+  if (!Number.isFinite(cfg.base)) cfg.base = CHAMPION_BASE;
+  try {
+    await setDoc(doc(db, 'config', 'champion_odds'), cfg, { merge: false });
+    championOddsCfg = cfg;
+    setOddsCfgStatus(`Saved odds for ${Object.keys(cfg.odds).length} teams (base ${cfg.base}).`, false);
+  } catch (e) { setOddsCfgStatus(`Failed: ${e.message}`, true); }
+});
+
+function setOddsCfgStatus(msg, isErr) {
+  const el = $('champ-odds-status');
+  if (el) { el.textContent = msg; el.className = `text-sm self-center ${isErr ? 'text-rose-600' : 'text-emerald-700'}`; }
 }
 
 $('champ-settle')?.addEventListener('click', async () => {
@@ -514,21 +558,27 @@ $('champ-settle')?.addEventListener('click', async () => {
       { champion: champ, championSettled: true, picksOpen: false, settledAt: serverTimestamp() },
       { merge: true });
 
+    const oddsCfg = championOddsCfg || {};
     const snap = await getDocs(collection(db, 'champions'));
     const batch = writeBatch(db);
-    let winners = 0, awardedAlready = 0;
+    let winners = 0, awardedAlready = 0, totalPaid = 0;
     snap.forEach(d => {
       const c = d.data();
       if (c.awarded) { awardedAlready++; return; }          // idempotent skip
       const won = c.pick === champ;
-      batch.update(doc(db, 'champions', d.id), { awarded: true, won });
-      if (won) {
+      // Payout = the odds locked at pick time (fallback: recompute from config).
+      const payout = won
+        ? (Number.isFinite(c.potential) ? c.potential : championPayout(c.pick, oddsCfg.odds, oddsCfg.base))
+        : 0;
+      batch.update(doc(db, 'champions', d.id), { awarded: true, won, payout });
+      if (won && payout > 0) {
         winners++;
-        batch.update(doc(db, 'users', c.userId), { balance: increment(500) });
+        totalPaid += payout;
+        batch.update(doc(db, 'users', c.userId), { balance: increment(payout) });
       }
     });
     await batch.commit();
-    setChamp(`✅ Settled on ${champ}. ${winners} winner(s) credited +500. ${awardedAlready ? awardedAlready + ' already-awarded skipped.' : ''}`, false);
+    setChamp(`✅ Settled on ${champ}. ${winners} winner(s) credited (+${totalPaid} pts total). ${awardedAlready ? awardedAlready + ' already-awarded skipped.' : ''}`, false);
   } catch (e) {
     console.error(e);
     setChamp(`Failed: ${e.message}`, true);
