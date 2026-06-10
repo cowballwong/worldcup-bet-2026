@@ -104,8 +104,8 @@ service cloud.firestore {
     }
 
     // ── champions ─────────────────────────────────────────────
-    // "Predict the champion" — one doc per user, keyed by uid. No stake;
-    // a correct pick is awarded +500 by the admin settlement path.
+    // "Predict the champion" — one doc per user, keyed by uid. No stake; a
+    // correct pick is paid (100 x locked outright odds) by the admin settlement.
     // A user may write ONLY their own pick doc; admins can write any (to mark
     // awarded/won on settlement). Frontend enforces the pre-tournament cutoff,
     // consistent with how bets enforce kickoff client-side.
