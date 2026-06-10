@@ -51,18 +51,25 @@ service cloud.firestore {
                         && request.resource.data.email == request.auth.token.email)
                     || isAdmin();
       // Admins can adjust anything (balance corrections, settlement credits).
-      // A player may update ONLY their own balance, and ONLY to DECREASE it by a
-      // valid stake (10-200) — i.e. to pay for a bet. They cannot raise their own
-      // balance (winnings are credited admin/settlement-side) or change other fields.
-      // Player self-decrease path is checked FIRST so a normal bet never depends
-      // on isAdmin() (which needs the config doc). isAdmin() is the fallback.
+      // A player may update ONLY their own balance, and ONLY by a valid stake-sized
+      // amount (10-200) — DOWN to pay for a bet, or UP to refund one they delete /
+      // edit before kickoff (the My Bets ✏️/🗑️ buttons). They still cannot credit
+      // themselves winnings (settlement is admin-side) or change other fields.
+      // Self path is checked FIRST so a normal bet never depends on isAdmin()
+      // (which needs the config doc). isAdmin() is the fallback.
+      // NOTE: rules can't see the matching bet write in the same transaction, so the
+      // ±10-200 bound is the guard. Friends game, no real money — acceptable, and
+      // symmetric to the existing stake-decrease allowance.
       allow update: if (isSelf(uid)
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance'])
                         && request.resource.data.balance is number
                         && request.resource.data.balance >= 0
-                        && request.resource.data.balance < resource.data.balance
-                        && (resource.data.balance - request.resource.data.balance) >= 10
-                        && (resource.data.balance - request.resource.data.balance) <= 200)
+                        && (
+                             ( (resource.data.balance - request.resource.data.balance) >= 10
+                               && (resource.data.balance - request.resource.data.balance) <= 200 )   // pay stake (down)
+                          || ( (request.resource.data.balance - resource.data.balance) >= 10
+                               && (request.resource.data.balance - resource.data.balance) <= 200 )   // refund bet (up)
+                        ))
                     || isAdmin();
       allow delete: if isAdmin();
     }
