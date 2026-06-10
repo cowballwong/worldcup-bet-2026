@@ -431,3 +431,14 @@ img.emoji {
 .champ-team .champ-check { position: absolute; top: 3px; right: 5px; font-size: 0.7rem; }
 [data-theme="dark"] .champ-o { color: #94a3b8; }
 [data-theme="dark"] .champ-pay { color: #fbbf24; }
+
+/* "You bet on this" remark on match cards */
+.my-bet-remark { margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px dashed #e2e8f0; font-size: 0.72rem; color: #475569; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.mbr-chip { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; font-weight: 600; font-size: 0.7rem; }
+.mbr-chip.mbr-open { background: #dbeafe; color: #1e40af; }
+.mbr-chip.mbr-won  { background: #dcfce7; color: #166534; }
+.mbr-chip.mbr-lost { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .my-bet-remark { color: #94a3b8; border-top-color: #334155; }
+[data-theme="dark"] .mbr-chip.mbr-open { background: #1e3a5f; color: #bfdbfe; }
+[data-theme="dark"] .mbr-chip.mbr-won  { background: #052e16; color: #bbf7d0; }
+[data-theme="dark"] .mbr-chip.mbr-lost { background: #450a0a; color: #fecaca; }

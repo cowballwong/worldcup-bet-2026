@@ -22,6 +22,7 @@ const db = getFirestore(app);
 let currentUser = null;
 let currentUserDoc = null;
 let matchesCache = new Map();   // id → match doc data
+let myBetsByMatch = new Map();  // matchId → [my bets on that match]
 let adminEmails = [];
 let unsubMatches = null;
 let unsubLeaderboard = null;
@@ -282,6 +283,7 @@ function renderMatches(matches) {
           </div>
         </div>
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
+        ${myBetRemark(m.id)}
       </div>
     `;
   }).join('');
@@ -298,6 +300,21 @@ function renderMatches(matches) {
       openBetModal(card.dataset.matchId);
     });
   });
+}
+
+// "You bet on this" remark for a match card — shows the user's own bets so the
+// Matches list makes it obvious which games you've already backed.
+function myBetRemark(matchId) {
+  const bets = myBetsByMatch.get(matchId);
+  if (!bets || bets.length === 0) return '';
+  const chips = bets.map(b => {
+    const cls = b.status === 'won' ? 'mbr-won' : b.status === 'lost' ? 'mbr-lost' : 'mbr-open';
+    const res = b.status === 'won' ? `+${b.payout ?? Math.round(b.stake * b.odds)}`
+              : b.status === 'lost' ? `-${b.stake}`
+              : `${b.stake} pts`;
+    return `<span class="mbr-chip ${cls}">${b.selectionLabel || b.marketLabel} @ ${b.odds} · ${res}</span>`;
+  }).join('');
+  return `<div class="my-bet-remark">🎟️ 你已落注:${chips}</div>`;
 }
 
 // Bilingual team label, with fallback to slot placeholder for knockout TBDs.
@@ -528,7 +545,15 @@ function subscribeMyBets() {
       const tb = b.placedAt?.toMillis?.() ?? 0;
       return tb - ta;
     });
+    // Index my bets by match so the Matches list can show a "已落注" remark.
+    myBetsByMatch = new Map();
+    for (const b of bets) {
+      if (!b.matchId) continue;
+      if (!myBetsByMatch.has(b.matchId)) myBetsByMatch.set(b.matchId, []);
+      myBetsByMatch.get(b.matchId).push(b);
+    }
     renderMyBets(bets);
+    if (matchesCache.size) renderMatches(Array.from(matchesCache.values()));
   }, err => {
     console.error('subscribeMyBets error:', err);
     document.getElementById('mybets-list').innerHTML =
