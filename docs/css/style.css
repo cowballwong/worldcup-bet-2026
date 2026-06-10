@@ -431,3 +431,20 @@ img.emoji {
 .champ-team .champ-check { position: absolute; top: 3px; right: 5px; font-size: 0.7rem; }
 [data-theme="dark"] .champ-o { color: #94a3b8; }
 [data-theme="dark"] .champ-pay { color: #fbbf24; }
+
+/* "How to play" card */
+.howto { border: 1px solid #e2e8f0; background: #fff; border-radius: 0.7rem; padding: 0.5rem 0.9rem; margin-bottom: 1rem; }
+.howto > summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; list-style: none; padding: 0.25rem 0; }
+.howto > summary::-webkit-details-marker { display: none; }
+.howto > summary::before { content: "▸ "; color: #059669; }
+.howto[open] > summary::before { content: "▾ "; }
+.howto-body { font-size: 0.85rem; color: #475569; padding: 0.3rem 0 0.4rem; }
+.howto-body p { margin: 0.3rem 0; }
+.howto-body ul { margin: 0.4rem 0; padding: 0; list-style: none; }
+.howto-body li { margin: 0.45rem 0; line-height: 1.4; }
+.howto-body b { color: #0f172a; }
+.howto-foot { font-size: 0.78rem; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 0.4rem; margin-top: 0.5rem; }
+[data-theme="dark"] .howto { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .howto-body { color: #cbd5e1; }
+[data-theme="dark"] .howto-body b { color: #f1f5f9; }
+[data-theme="dark"] .howto-foot { color: #64748b; border-top-color: #334155; }
