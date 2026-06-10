@@ -25,6 +25,10 @@ let adminEmails = [];
 let unsubMatches = null;
 let unsubLeaderboard = null;
 let unsubMyBets = null;
+let unsubChampionConfig = null;
+let unsubMyChampion = null;
+let championConfig = null;   // { champion, championSettled }
+let myChampion = null;       // { pick, pickZh, ... }
 
 // ── DOM ────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -127,6 +131,8 @@ onAuthStateChanged(auth, async (user) => {
   subscribeLeaderboard();
   subscribeMyBets();
   subscribeAIBets();
+  subscribeChampionConfig();
+  subscribeMyChampion();
 });
 
 // ── LillyRose AI bets subscription ─────────────────────────────
@@ -803,7 +809,142 @@ renderMatches = function (matches) {
   _origRenderMatches(matches);
   renderBracket();
   renderStandings();
+  renderChampion();
 };
+
+// ── Predict the champion ───────────────────────────────────────
+// No stake. One pick per user (champions/{uid}); correct pick = +500 pts,
+// credited by the admin settlement path. Cutoff = first match kick-off,
+// enforced client-side (same trust model as bet kickoff cutoff).
+function subscribeChampionConfig() {
+  if (unsubChampionConfig) unsubChampionConfig();
+  unsubChampionConfig = onSnapshot(doc(db, 'config', 'tournament'), snap => {
+    championConfig = snap.exists() ? snap.data() : null;
+    renderChampion();
+  }, () => { championConfig = null; renderChampion(); });
+}
+
+function subscribeMyChampion() {
+  if (unsubMyChampion) unsubMyChampion();
+  if (!currentUser) return;
+  unsubMyChampion = onSnapshot(doc(db, 'champions', currentUser.uid), snap => {
+    myChampion = snap.exists() ? snap.data() : null;
+    renderChampion();
+  }, () => { myChampion = null; renderChampion(); });
+}
+
+// Earliest kick-off across all loaded matches = the pick deadline.
+function championCutoffMs() {
+  let earliest = Infinity;
+  for (const m of matchesCache.values()) {
+    const t = new Date(m.kickoffISO).getTime();
+    if (Number.isFinite(t) && t < earliest) earliest = t;
+  }
+  return earliest;
+}
+
+// Team → flag map, derived from the loaded fixtures.
+function teamFlagMap() {
+  const map = {};
+  for (const m of matchesCache.values()) {
+    if (m.homeTeam && m.homeTeam !== 'TBD' && m.homeFlag) map[m.homeTeam] = m.homeFlag;
+    if (m.awayTeam && m.awayTeam !== 'TBD' && m.awayFlag) map[m.awayTeam] = m.awayFlag;
+  }
+  return map;
+}
+
+function renderChampion() {
+  const grid = $('champion-grid');
+  const statusEl = $('champion-status');
+  if (!grid || !statusEl) return;
+
+  const flags = teamFlagMap();
+  // Team universe: all non-TBD teams in fixtures; fall back to the ZH dictionary.
+  let teams = Object.keys(flags);
+  if (teams.length < 24) teams = Object.keys(TEAM_ZH).filter(t => t !== 'TBD');
+  teams = [...new Set(teams)].sort();
+
+  const settled = championConfig && championConfig.championSettled;
+  const champion = championConfig && championConfig.champion;
+  const cutoff = championCutoffMs();
+  const locked = settled || (Number.isFinite(cutoff) && Date.now() >= cutoff);
+  const myPick = myChampion && myChampion.pick;
+
+  // ── Status banner ──
+  if (settled && champion) {
+    const flag = flags[champion] || '🏆';
+    if (myPick && myPick === champion) {
+      statusEl.innerHTML = `<div class="champ-banner win">🏆 冠軍係 <b>${flag} ${teamPlainSafe(champion)}</b> — 你估中喇!<b>+500 分</b> 🎉</div>`;
+    } else if (myPick) {
+      statusEl.innerHTML = `<div class="champ-banner lose">🏆 冠軍係 <b>${flag} ${teamPlainSafe(champion)}</b>。你揀咗 ${teamPlainSafe(myPick)},今次估唔中 — 下屆再嚟!</div>`;
+    } else {
+      statusEl.innerHTML = `<div class="champ-banner">🏆 冠軍係 <b>${flag} ${teamPlainSafe(champion)}</b>。你今屆冇估冠軍。</div>`;
+    }
+  } else if (myPick) {
+    const flag = flags[myPick] || '🏳️';
+    const lockNote = locked ? ' · 已鎖定' : ' · 開賽前可改';
+    statusEl.innerHTML = `<div class="champ-banner pick">你嘅冠軍預測:<b>${flag} ${teamPlainSafe(myPick)}</b>${lockNote}</div>`;
+  } else if (locked) {
+    statusEl.innerHTML = `<div class="champ-banner">預測已截止(賽事已開始),你今屆冇揀冠軍。</div>`;
+  } else {
+    statusEl.innerHTML = `<div class="champ-banner">仲未揀 — 喺下面揀一隊做你嘅冠軍預測。</div>`;
+  }
+
+  // ── Team grid ──
+  if (settled) {
+    // Show only the champion + my pick context; hide the full picker.
+    grid.innerHTML = '';
+    grid.classList.add('hidden');
+    return;
+  }
+  grid.classList.remove('hidden');
+  grid.innerHTML = teams.map(t => {
+    const flag = flags[t] || '🏳️';
+    const zh = TEAM_ZH[t] || '';
+    const sel = (t === myPick) ? 'is-picked' : '';
+    const dis = locked ? 'is-locked' : '';
+    return `
+      <button class="champ-team ${sel} ${dis}" data-team="${escAttr(t)}" ${locked ? 'disabled' : ''}>
+        <span class="champ-flag">${flag}</span>
+        <span class="champ-name"><span class="champ-en">${escHtml(t)}</span>${zh ? `<span class="champ-zh">${escHtml(zh)}</span>` : ''}</span>
+        ${t === myPick ? '<span class="champ-check">✓</span>' : ''}
+      </button>`;
+  }).join('');
+
+  if (!locked) {
+    grid.querySelectorAll('.champ-team').forEach(btn => {
+      btn.addEventListener('click', () => pickChampion(btn.dataset.team));
+    });
+  }
+}
+
+async function pickChampion(team) {
+  if (!currentUser) return;
+  if (championConfig && championConfig.championSettled) return toast('預測已截止。');
+  const cutoff = championCutoffMs();
+  if (Number.isFinite(cutoff) && Date.now() >= cutoff) return toast('預測已截止(賽事已開始)。');
+  if (myChampion && myChampion.pick === team) return; // no-op re-pick
+  try {
+    await setDoc(doc(db, 'champions', currentUser.uid), {
+      userId: currentUser.uid,
+      displayName: currentUserDoc?.displayName || (currentUser.email || '').split('@')[0],
+      pick: team,
+      pickZh: TEAM_ZH[team] || '',
+      createdAt: serverTimestamp(),
+    });
+    toast(`已揀 ${teamPlainSafe(team)} 做冠軍 👑`);
+  } catch (err) {
+    console.error(err);
+    toast(`揀冠軍失敗: ${err.message}`);
+  }
+}
+
+function teamPlainSafe(en) {
+  const zh = TEAM_ZH[en];
+  return zh ? `${en} ${zh}` : en;
+}
+function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg) {

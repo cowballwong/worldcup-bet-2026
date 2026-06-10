@@ -70,6 +70,7 @@ onAuthStateChanged(auth, async user => {
   $('admin-view').classList.remove('hidden');
   subscribeAdminMatches();
   loadUsers();
+  initChampionAdmin();
 });
 
 // ── Tabs ───────────────────────────────────────────────────────
@@ -461,6 +462,91 @@ $('lr-generate')?.addEventListener('click', async () => {
 function setLR(msg, isErr) {
   $('lr-status').textContent = msg;
   $('lr-status').className = `text-sm ${isErr ? 'text-rose-600' : 'text-emerald-700'}`;
+}
+
+// ── Predict-the-champion settlement ────────────────────────────
+function initChampionAdmin() {
+  // Populate the team datalist from the ZH dictionary.
+  const dl = $('champ-team-list');
+  if (dl && !dl.dataset.filled) {
+    dl.innerHTML = Object.keys(TEAM_ZH).filter(t => t !== 'TBD').sort()
+      .map(t => `<option value="${t}">${t} ${TEAM_ZH[t] || ''}</option>`).join('');
+    dl.dataset.filled = '1';
+  }
+
+  // Live breakdown of everyone's picks + current settled state.
+  onSnapshot(collection(db, 'champions'), snap => {
+    const picks = [];
+    snap.forEach(d => picks.push(d.data()));
+    const counts = {};
+    for (const p of picks) counts[p.pick] = (counts[p.pick] || 0) + 1;
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const root = $('champ-breakdown');
+    if (!root) return;
+    if (picks.length === 0) { root.innerHTML = '<span class="text-slate-500">No champion picks yet.</span>'; return; }
+    root.innerHTML = `<div class="mb-2 text-slate-500">${picks.length} pick${picks.length === 1 ? '' : 's'} total</div>` +
+      sorted.map(([t, n]) => `<div class="flex justify-between border-b py-1"><span>${t} ${TEAM_ZH[t] || ''}</span><span class="font-semibold">${n}</span></div>`).join('');
+  }, err => {
+    const root = $('champ-breakdown');
+    if (root) root.innerHTML = `<span class="text-rose-600">Failed: ${err.message}</span>`;
+  });
+
+  // Reflect current config champion in the input.
+  getDoc(doc(db, 'config', 'tournament')).then(s => {
+    if (s.exists() && s.data().champion && $('champ-team-input')) {
+      $('champ-team-input').value = s.data().champion;
+      if (s.data().championSettled) setChamp(`Currently SETTLED on ${s.data().champion}. Re-running is safe.`, false);
+    }
+  }).catch(() => {});
+}
+
+$('champ-settle')?.addEventListener('click', async () => {
+  const champ = ($('champ-team-input').value || '').trim();
+  if (!champ) return setChamp('Enter the champion team first.', true);
+  if (!TEAM_ZH[champ]) {
+    if (!confirm(`"${champ}" isn't in the team dictionary. Settle anyway?`)) return;
+  }
+  if (!confirm(`Settle champion = "${champ}" and award +500 to everyone who picked it?`)) return;
+  setChamp('Settling…', false);
+  try {
+    // Mark config first so the player UI flips to "settled".
+    await setDoc(doc(db, 'config', 'tournament'),
+      { champion: champ, championSettled: true, picksOpen: false, settledAt: serverTimestamp() },
+      { merge: true });
+
+    const snap = await getDocs(collection(db, 'champions'));
+    const batch = writeBatch(db);
+    let winners = 0, awardedAlready = 0;
+    snap.forEach(d => {
+      const c = d.data();
+      if (c.awarded) { awardedAlready++; return; }          // idempotent skip
+      const won = c.pick === champ;
+      batch.update(doc(db, 'champions', d.id), { awarded: true, won });
+      if (won) {
+        winners++;
+        batch.update(doc(db, 'users', c.userId), { balance: increment(500) });
+      }
+    });
+    await batch.commit();
+    setChamp(`✅ Settled on ${champ}. ${winners} winner(s) credited +500. ${awardedAlready ? awardedAlready + ' already-awarded skipped.' : ''}`, false);
+  } catch (e) {
+    console.error(e);
+    setChamp(`Failed: ${e.message}`, true);
+  }
+});
+
+$('champ-reopen')?.addEventListener('click', async () => {
+  if (!confirm('Re-open champion picks? This clears the settled flag (does NOT claw back points already awarded).')) return;
+  try {
+    await setDoc(doc(db, 'config', 'tournament'),
+      { championSettled: false, picksOpen: true }, { merge: true });
+    setChamp('Picks re-opened. (Awarded points kept.)', false);
+  } catch (e) { setChamp(`Failed: ${e.message}`, true); }
+});
+
+function setChamp(msg, isErr) {
+  const el = $('champ-status');
+  if (el) { el.textContent = msg; el.className = `text-sm ${isErr ? 'text-rose-600' : 'text-emerald-700'}`; }
 }
 
 // ── Refresh odds (The Odds API) ────────────────────────────────

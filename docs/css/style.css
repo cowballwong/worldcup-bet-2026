@@ -390,3 +390,35 @@ img.emoji {
 [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
   background: #0f172a; color: #e2e8f0; border-color: #475569;
 }
+
+/* ── Predict the champion ─────────────────────────────────────── */
+.champ-banner {
+  font-size: 0.9rem; padding: 0.6rem 0.8rem; border-radius: 0.6rem;
+  background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0;
+}
+.champ-banner.pick { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+.champ-banner.win  { background: #dcfce7; border-color: #86efac; color: #166534; }
+.champ-banner.lose { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+[data-theme="dark"] .champ-banner { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+[data-theme="dark"] .champ-banner.pick { background: #422006; border-color: #a16207; color: #fde68a; }
+[data-theme="dark"] .champ-banner.win  { background: #052e16; border-color: #166534; color: #bbf7d0; }
+[data-theme="dark"] .champ-banner.lose { background: #450a0a; border-color: #991b1b; color: #fecaca; }
+
+.champ-team {
+  position: relative; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 0.65rem; border: 1px solid #e2e8f0; border-radius: 0.6rem;
+  background: #fff; text-align: left; cursor: pointer; transition: all .12s;
+}
+.champ-team:hover:not(.is-locked) { border-color: #fcd34d; background: #fffbeb; }
+.champ-team.is-picked { border-color: #f59e0b; background: #fef3c7; box-shadow: 0 0 0 1px #f59e0b inset; }
+.champ-team.is-locked { cursor: default; opacity: .55; }
+.champ-flag { font-size: 1.25rem; line-height: 1; flex-shrink: 0; }
+.champ-flag img { width: 1.25rem; height: 1.25rem; }
+.champ-name { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.champ-en { font-weight: 600; font-size: 0.82rem; }
+.champ-zh { font-size: 0.7rem; color: #64748b; }
+.champ-check { margin-left: auto; color: #f59e0b; font-weight: 700; }
+[data-theme="dark"] .champ-team { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .champ-team:hover:not(.is-locked) { border-color: #a16207; background: #422006; }
+[data-theme="dark"] .champ-team.is-picked { background: #422006; border-color: #f59e0b; }
+[data-theme="dark"] .champ-zh { color: #94a3b8; }

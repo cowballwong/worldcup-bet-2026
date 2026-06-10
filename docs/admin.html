@@ -38,6 +38,7 @@
   <div class="flex border-b border-slate-200 mb-4 overflow-x-auto">
     <button class="tab-btn px-3 py-2 font-medium text-rose-700 border-b-2 border-rose-700 whitespace-nowrap" data-tab="fixtures">⚽️ Fixtures</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="users">👥 Users</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="champion">👑 Champion</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="lillyrose">🤖 LillyRose</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="odds">📈 Refresh odds</button>
     <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="bulk-import">📥 Import</button>
@@ -57,6 +58,24 @@
     <h2 class="font-semibold mb-3">Registered players · 玩家</h2>
     <div id="user-list" class="space-y-2">
       <p class="text-slate-500 text-sm">Loading…</p>
+    </div>
+  </section>
+
+  <section id="tab-champion" class="tab-panel hidden">
+    <h2 class="font-semibold mb-2">Predict-the-champion · 估冠軍結算</h2>
+    <p class="text-sm text-slate-600 mb-3">When the tournament is won, pick the winning team and settle. Everyone whose prediction matches gets <b>+500 pts</b>. Idempotent — safe to re-run; already-awarded picks are skipped.</p>
+    <div class="flex flex-wrap gap-2 items-end mb-3">
+      <label class="text-sm">Champion team
+        <input id="champ-team-input" list="champ-team-list" class="block border rounded px-2 py-1 mt-1 text-sm w-56" placeholder="e.g. Brazil">
+        <datalist id="champ-team-list"></datalist>
+      </label>
+      <button id="champ-settle" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm">Settle champion (award +500) 🏆</button>
+      <button id="champ-reopen" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded text-sm">Re-open picks</button>
+    </div>
+    <p id="champ-status" class="text-sm"></p>
+    <div class="mt-4">
+      <h3 class="text-sm font-semibold mb-1">Picks so far · 大家點揀</h3>
+      <div id="champ-breakdown" class="text-sm text-slate-600">Loading…</div>
     </div>
   </section>
 
