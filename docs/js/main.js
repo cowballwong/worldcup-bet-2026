@@ -30,9 +30,12 @@ let unsubMyBets = null;
 let unsubChampionConfig = null;
 let unsubMyChampion = null;
 let unsubChampionOdds = null;
+let unsubAllChampions = null;
 let championConfig = null;   // { champion, championSettled }
 let myChampion = null;       // { pick, pickZh, lockedOdds, potential, ... }
 let championOdds = null;     // { base, odds:{team:number} } override from config (else defaults)
+let championsByUid = new Map(); // uid → { pick, ... } for everyone (leaderboard display)
+let leaderboardRows = [];    // cache so we can re-render when champion picks change
 
 // ── DOM ────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -138,6 +141,7 @@ onAuthStateChanged(auth, async (user) => {
   subscribeChampionConfig();
   subscribeMyChampion();
   subscribeChampionOdds();
+  subscribeAllChampions();
 });
 
 // ── LillyRose AI bets subscription ─────────────────────────────
@@ -496,6 +500,7 @@ function subscribeLeaderboard() {
   unsubLeaderboard = onSnapshot(q, snap => {
     const rows = [];
     snap.forEach(d => rows.push({ uid: d.id, ...d.data() }));
+    leaderboardRows = rows;
     renderLeaderboard(rows);
   });
 }
@@ -517,14 +522,29 @@ function renderLeaderboard(rows) {
     return { ...r, rank };
   });
 
+  const flags = teamFlagMap();
+  const champSettled = championConfig && championConfig.championSettled;
+  const actualChamp = championConfig && championConfig.champion;
   root.innerHTML = ranked.map(r => {
     const isMe = currentUser && r.uid === currentUser.uid;
     const medal = medals[r.rank - 1] || r.rank;
+    // Champion pick line (everyone can see everyone's pick).
+    const cp = championsByUid.get(r.uid);
+    let champHtml = '<span class="lb-champ none">👑 —</span>';
+    if (cp && cp.pick) {
+      const flag = flags[cp.pick] || '🏳️';
+      const hit = champSettled && actualChamp ? (cp.pick === actualChamp) : null;
+      const cls = hit === true ? 'win' : hit === false ? 'miss' : '';
+      champHtml = `<span class="lb-champ ${cls}">👑 ${flag} ${escHtml(cp.pick)}${hit === true ? ' ✅' : ''}</span>`;
+    }
     return `
       <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
         <span class="rank-medal">${medal}</span>
-        <span class="flex-1 truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
-        <span class="font-semibold">${r.balance} pts</span>
+        <span class="flex-1 min-w-0">
+          <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
+          ${champHtml}
+        </span>
+        <span class="font-semibold whitespace-nowrap">${r.balance} pts</span>
       </div>
     `;
   }).join('');
@@ -868,6 +888,16 @@ function subscribeChampionOdds() {
     championOdds = snap.exists() ? snap.data() : null;
     renderChampion();
   }, () => { championOdds = null; renderChampion(); });
+}
+
+// Everyone's champion picks (for the leaderboard).
+function subscribeAllChampions() {
+  if (unsubAllChampions) unsubAllChampions();
+  unsubAllChampions = onSnapshot(collection(db, 'champions'), snap => {
+    championsByUid = new Map();
+    snap.forEach(d => championsByUid.set(d.id, d.data()));
+    if (leaderboardRows.length) renderLeaderboard(leaderboardRows);
+  }, () => {});
 }
 
 // Odds override map + base from config (falls back to bundled defaults).

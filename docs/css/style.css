@@ -442,3 +442,14 @@ img.emoji {
 [data-theme="dark"] .mbr-chip.mbr-open { background: #1e3a5f; color: #bfdbfe; }
 [data-theme="dark"] .mbr-chip.mbr-won  { background: #052e16; color: #bbf7d0; }
 [data-theme="dark"] .mbr-chip.mbr-lost { background: #450a0a; color: #fecaca; }
+
+/* champion pick shown on each leaderboard row */
+.lb-name { display: block; }
+.lb-champ { display: block; font-size: 0.72rem; color: #64748b; margin-top: 1px; }
+.lb-champ.none { color: #cbd5e1; }
+.lb-champ.win { color: #166534; font-weight: 600; }
+.lb-champ.miss { color: #b91c1c; opacity: .7; }
+[data-theme="dark"] .lb-champ { color: #94a3b8; }
+[data-theme="dark"] .lb-champ.none { color: #475569; }
+[data-theme="dark"] .lb-champ.win { color: #86efac; }
+[data-theme="dark"] .lb-champ.miss { color: #fca5a5; }
