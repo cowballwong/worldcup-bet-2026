@@ -103,6 +103,18 @@
     </div>
     <p id="lr-status" class="text-sm"></p>
     <div id="lr-bets-summary" class="mt-3 text-sm text-slate-500"></div>
+
+    <div class="mt-4 border-t pt-3">
+      <h3 class="text-sm font-semibold mb-1">👑 LillyRose's champion pick · LillyRose 估冠軍</h3>
+      <p class="text-xs text-slate-600 mb-2">Give the AI player a title prediction too (no stake, pays 100 × odds if correct). Default is her honest top pick.</p>
+      <div class="flex flex-wrap gap-2 items-end">
+        <label class="text-sm">Team
+          <input id="lr-champ-input" list="champ-team-list" value="Spain" class="block border rounded px-2 py-1 mt-1 text-sm w-48">
+        </label>
+        <button id="lr-champ-set" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-sm">Set LillyRose champion 👑</button>
+        <span id="lr-champ-status" class="text-sm self-center"></span>
+      </div>
+    </div>
   </section>
 
   <section id="tab-odds" class="tab-panel hidden">
@@ -201,6 +213,6 @@
 
 <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm shadow-lg hidden z-30"></div>
 
-<script type="module" src="js/admin.js"></script>
+<script type="module" src="js/admin.js?v=20260610c"></script>
 </body>
 </html>

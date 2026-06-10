@@ -599,6 +599,37 @@ function setChamp(msg, isErr) {
   if (el) { el.textContent = msg; el.className = `text-sm ${isErr ? 'text-rose-600' : 'text-emerald-700'}`; }
 }
 
+// Give the LillyRose AI player a champion prediction too.
+$('lr-champ-set')?.addEventListener('click', async () => {
+  const team = ($('lr-champ-input').value || '').trim();
+  if (!team) return setLRChamp('Enter a team.', true);
+  const cfg = championOddsCfg || {};
+  const odds = (cfg.odds && Number.isFinite(cfg.odds[team])) ? cfg.odds[team]
+             : (Number.isFinite(DEFAULT_CHAMPION_ODDS[team]) ? DEFAULT_CHAMPION_ODDS[team] : 251);
+  const potential = championPayout(team, cfg.odds, cfg.base);
+  try {
+    await setDoc(doc(db, 'champions', LILLYROSE_UID), {
+      userId: LILLYROSE_UID,
+      displayName: LILLYROSE_NAME,
+      pick: team,
+      pickZh: TEAM_ZH[team] || '',
+      lockedOdds: odds,
+      potential,
+      isAI: true,
+      createdAt: serverTimestamp(),
+    });
+    setLRChamp(`LillyRose picked ${team} @ ${odds} (win = +${potential} pts).`, false);
+  } catch (e) {
+    console.error(e);
+    setLRChamp(`Failed: ${e.message}`, true);
+  }
+});
+
+function setLRChamp(msg, isErr) {
+  const el = $('lr-champ-status');
+  if (el) { el.textContent = msg; el.className = `text-sm self-center ${isErr ? 'text-rose-600' : 'text-emerald-700'}`; }
+}
+
 // ── Refresh odds (The Odds API) ────────────────────────────────
 let pendingOddsUpdates = null;
 
