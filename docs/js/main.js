@@ -284,20 +284,14 @@ function renderMatches(matches) {
   }
   $('match-count').textContent = `${matches.length} match${matches.length === 1 ? '' : 'es'}`;
 
-  // Order: live now → upcoming (soonest first, "NEXT" pinned on top) → finished
-  // (most recent first, with the prediction reveal underneath).
-  const now = Date.now();
+  // Keep the natural chronological order (finished matches STAY in place); we
+  // just identify the "next" match (soonest one not yet settled) so we can pin a
+  // badge on it and auto-scroll it into view on load.
   const koMs = m => new Date(m.kickoffISO).getTime();
-  const isSettled = m => m.status === 'settled';
-  const isLive = m => !isSettled(m) && (m.status === 'live' || koMs(m) <= now);
-  const isUpcoming = m => !isSettled(m) && !isLive(m);
-  const liveM = matches.filter(isLive).sort((a, b) => koMs(a) - koMs(b));
-  const upM = matches.filter(isUpcoming).sort((a, b) => koMs(a) - koMs(b));
-  const finM = matches.filter(isSettled).sort((a, b) => koMs(b) - koMs(a));
-  const nextId = upM.length ? upM[0].id : null;
-  const ordered = [...liveM, ...upM, ...finM];
+  const notSettled = matches.filter(m => m.status !== 'settled').sort((a, b) => koMs(a) - koMs(b));
+  const nextId = notSettled.length ? notSettled[0].id : null;
 
-  const html = ordered.map(m => {
+  const html = matches.map(m => {
     const ko = new Date(m.kickoffISO);
     const isClosed = m.status === 'settled' || isPastKickoff(m);
     const isNext = m.id === nextId;
@@ -345,6 +339,13 @@ function renderMatches(matches) {
     `;
   }).join('');
   root.innerHTML = html;
+
+  // Auto-scroll to the next match ONCE per page load (live updates re-render,
+  // but we don't want to keep yanking the view while Anzon is reading).
+  if (nextId && !window.__wcScrolledToNext) {
+    const nx = root.querySelector('.match-card.is-next');
+    if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} window.__wcScrolledToNext = true; }
+  }
 
   root.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', () => {
