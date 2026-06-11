@@ -287,6 +287,19 @@ function matchPredictions(matchId) {
     </div>`;
 }
 
+let _scrollTimer = null;
+function maybeScrollToNext(nextId, matches) {
+  if (!nextId || nextId === window.__wcScrolledNextId) return;
+  const idx = matches.findIndex(m => m.id === nextId);
+  if (idx <= 0) { window.__wcScrolledNextId = nextId; return; }  // next is first card
+  clearTimeout(_scrollTimer);
+  _scrollTimer = setTimeout(() => {
+    const nx = document.querySelector('#match-list .match-card.is-next');
+    if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+    window.__wcScrolledNextId = nextId;
+  }, 400);
+}
+
 function renderMatches(matches) {
   // Player view only shows group-stage + scheduled knockout matches with kickoff
   // ahead. Knockout slot labels handled by formatTeam().
@@ -356,17 +369,12 @@ function renderMatches(matches) {
   root.innerHTML = html;
 
   // Auto-scroll to the next match whenever it CHANGES — on first load, AND when a
-  // match just finished so "next" advances to the following game (live Firestore
-  // update re-renders this). Skip when the next match is already the first card
-  // (nothing finished sits above it → keep the "Upcoming" heading in view).
-  if (nextId && nextId !== window.__wcScrolledNextId) {
-    const idx = matches.findIndex(m => m.id === nextId);
-    if (idx > 0) {
-      const nx = root.querySelector('.match-card.is-next');
-      if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
-    }
-    window.__wcScrolledNextId = nextId;
-  }
+  // match just finished so "next" advances to the following game. renderMatches is
+  // called by THREE subscriptions (matches / myBets / results); on load they fire
+  // in a burst, each rewriting innerHTML and cancelling an in-flight smooth scroll.
+  // So debounce: only scroll ~400ms after the last re-render, on the settled DOM.
+  // Skip when the next match is the first card (nothing finished sits above it).
+  maybeScrollToNext(nextId, matches);
 
   root.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', () => {
