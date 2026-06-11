@@ -353,11 +353,17 @@ function renderMatches(matches) {
   }).join('');
   root.innerHTML = html;
 
-  // Auto-scroll to the next match ONCE per page load (live updates re-render,
-  // but we don't want to keep yanking the view while Anzon is reading).
+  // Auto-scroll to the next match ONCE per load — but ONLY when finished matches
+  // sit above it (so it's actually off-screen). If the next match is already the
+  // first card, leave the page at the top so the "Upcoming matches" heading and
+  // the highlighted card both stay in view.
   if (nextId && !window.__wcScrolledToNext) {
-    const nx = root.querySelector('.match-card.is-next');
-    if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} window.__wcScrolledToNext = true; }
+    const idx = matches.findIndex(m => m.id === nextId);
+    if (idx > 0) {
+      const nx = root.querySelector('.match-card.is-next');
+      if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+    }
+    window.__wcScrolledToNext = true;
   }
 
   root.querySelectorAll('.match-card').forEach(card => {

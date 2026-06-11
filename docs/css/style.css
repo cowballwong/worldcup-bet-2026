@@ -456,7 +456,7 @@ img.emoji {
 
 /* Next-match pin + finished-match prediction reveal */
 .status-badge.next { background: #f59e0b; color: #fff; }
-.match-card.is-next { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b; scroll-margin-top: 112px; }
+.match-card.is-next { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b; scroll-margin-top: 120px; }
 [data-theme="dark"] .match-card.is-next { border-color: #f59e0b; }
 .preds { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
 .preds-h { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
