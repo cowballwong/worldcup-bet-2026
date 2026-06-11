@@ -129,29 +129,50 @@ def main():
     if not firebase_admin._apps:
         firebase_admin.initialize_app(credentials.Certificate(str(SA_JSON)))
     db = firestore.client()
+    now = datetime.now(timezone.utc)
+
+    # Self-gate: only hit the football-data API if at least one of OUR matches
+    # has kicked off (last ~4h) and isn't settled yet. Keeps the 5-min cron cheap
+    # on idle ticks + respects the free-tier API quota.
+    all_matches = [(d.id, d.to_dict()) for d in db.collection("matches").stream()]
+    def _pending(m):
+        if m.get("status") == "settled":
+            return False
+        try:
+            ko = datetime.fromisoformat((m.get("kickoffISO", "") or "").replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        return ko <= now <= ko + timedelta(hours=6) and m.get("homeTeam") not in (None, "", "TBD")
+    pending = [(mid, m) for mid, m in all_matches if _pending(m)]
+    if not pending:
+        print("no recently-kicked-off unsettled match — skip API call")
+        return
 
     wc = _fetch_wc()
-    print(f"football-data: {len(wc)} WC fixtures fetched")
-
-    now = datetime.now(timezone.utc)
+    print(f"football-data: {len(wc)} WC fixtures fetched · {len(pending)} pending our side")
     settled_count = 0
-    for doc in db.collection("matches").stream():
-        m = doc.to_dict()
-        mid = doc.id
-        if m.get("status") == "settled":
-            continue
-        ko = m.get("kickoffISO", "")
-        try:
-            ko_dt = datetime.fromisoformat(ko.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if ko_dt > now:  # not started yet
-            continue
+    live_count = 0
+    for mid, m in pending:
         home, away = m.get("homeTeam", ""), m.get("awayTeam", "")
-        if home == "TBD" or away == "TBD":
-            continue
         api = wc.get(f"{_norm(home)}|{_norm(away)}")
-        if not api or api.get("status") != "FINISHED":
+        if not api:
+            continue
+        st = api.get("status")
+        # LIVE: match in progress → push the running score to the player cards.
+        if st in ("IN_PLAY", "PAUSED"):
+            sc = api.get("score") or {}
+            ft = sc.get("fullTime") or {}
+            if ft.get("home") is not None and ft.get("away") is not None:
+                live = {"home": int(ft["home"]), "away": int(ft["away"]),
+                        "minute": api.get("minute") or ("HT" if st == "PAUSED" else "")}
+                if DRY:
+                    print(f"WOULD live-update {mid}: {home} {live['home']}-{live['away']} {away} ({live['minute']})")
+                else:
+                    db.collection("matches").document(mid).update({
+                        "status": "live", "liveScore": live, "updatedAt": firestore.SERVER_TIMESTAMP})
+                live_count += 1
+            continue
+        if st != "FINISHED":
             continue
         sc = api.get("score") or {}
         ft = sc.get("fullTime") or {}
@@ -173,6 +194,7 @@ def main():
             "finalScore": final_score,
             "halftimeScore": half_score,
             "status": "settled",
+            "liveScore": None,
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
 
@@ -221,8 +243,8 @@ def main():
         _send_telegram(f"⚽️ 自動結算:{line}\n{winners}/{len(predictions)} 個估中 · 已派彩 + 出賽果")
         print(f"settled {mid}: {line} ({winners}/{len(predictions)} winners)")
 
-    msg = f"auto_settle done — {settled_count} match(es) {'would settle' if DRY else 'settled'}"
-    print(msg)
+    print(f"auto_settle done — {settled_count} settled, {live_count} live-updated "
+          f"{'(dry-run)' if DRY else ''}")
 
 
 def _pred(bet: dict) -> dict:
