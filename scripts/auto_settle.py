@@ -196,6 +196,12 @@ def main():
     db = firestore.client()
     now = datetime.now(timezone.utc)
 
+    # LillyRose AI auto-bets upcoming matches (Firestore-only, no external quota).
+    try:
+        _lillyrose_autobet(db)
+    except Exception as e:  # noqa: BLE001
+        print(f"lillyrose autobet skipped: {e}", file=sys.stderr)
+
     # Self-gate: only hit the football-data API if at least one of OUR matches
     # has kicked off (last ~4h) and isn't settled yet. Keeps the 5-min cron cheap
     # on idle ticks + respects the free-tier API quota.
@@ -303,8 +309,114 @@ def main():
         _send_telegram(f"⚽️ 自動結算:{line}\n{winners}/{len(predictions)} 個估中 · 已派彩 + 出賽果")
         print(f"settled {mid}: {line} ({winners}/{len(predictions)} winners)")
 
+        # Champion auto-settle the moment the FINAL is decided.
+        if (m.get("stage") or "").lower() == "final":
+            champ = (home if final_score["home"] > final_score["away"]
+                     else away if final_score["away"] > final_score["home"]
+                     else _pen_winner(api, home, away))
+            if champ:
+                _settle_champion(db, champ)
+
     print(f"auto_settle done — {settled_count} settled, {live_count} live-updated "
           f"{'(dry-run)' if DRY else ''}")
+
+
+def _pen_winner(api: dict, home: str, away: str):
+    """If the final went to penalties, football-data carries score.penalties."""
+    pens = (api.get("score") or {}).get("penalties") or {}
+    if pens.get("home") is not None and pens.get("away") is not None:
+        if pens["home"] > pens["away"]:
+            return home
+        if pens["away"] > pens["home"]:
+            return away
+    return None
+
+
+def _settle_champion(db, champion_team: str):
+    """Auto-award the predict-the-champion game once the title is decided."""
+    from firebase_admin import firestore
+    cfg = db.collection("config").document("tournament")
+    cur = cfg.get().to_dict() or {}
+    if cur.get("championSettled"):
+        return
+    cfg.set({"champion": champion_team, "championSettled": True, "picksOpen": False,
+             "settledAt": firestore.SERVER_TIMESTAMP}, merge=True)
+    batch = db.batch()
+    winners = 0
+    total = 0
+    for c in db.collection("champions").stream():
+        cd = c.to_dict()
+        total += 1
+        if cd.get("awarded"):
+            continue
+        won = cd.get("pick") == champion_team
+        payout = (cd.get("potential") or 0) if won else 0
+        batch.update(c.reference, {"awarded": True, "won": won, "payout": payout})
+        if won and payout > 0:
+            batch.update(db.collection("users").document(cd["userId"]),
+                         {"balance": firestore.Increment(payout)})
+            winners += 1
+    batch.commit()
+    _send_telegram(f"🏆 冠軍誕生:{champion_team}!估冠軍已自動結算 · {winners}/{total} 人估中,已派彩。")
+    print(f"champion settled: {champion_team} ({winners}/{total} correct)")
+
+
+def _lillyrose_autobet(db) -> int:
+    """LillyRose AI: bet the 1X2 favourite on any match kicking off in the next
+    12h she hasn't bet yet. Idempotent (skips matches she's already on)."""
+    import random
+    from firebase_admin import firestore
+    LR = "lillyrose-ai"
+    uref = db.collection("users").document(LR)
+    usnap = uref.get()
+    if not usnap.exists:
+        return 0
+    bal = usnap.to_dict().get("balance", 0)
+    already = {b.to_dict().get("matchId") for b in
+               db.collection("bets").where("userId", "==", LR).stream()}
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(hours=12)
+    placed = 0
+    for d in db.collection("matches").stream():
+        m = d.to_dict()
+        if d.id in already or m.get("status") == "settled":
+            continue
+        if m.get("homeTeam") in (None, "", "TBD") or m.get("awayTeam") in (None, "", "TBD"):
+            continue
+        try:
+            ko = datetime.fromisoformat((m.get("kickoffISO", "") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if not (now < ko < horizon):
+            continue
+        o = m.get("odds") or {}
+        cands = [("home", o.get("home"), m["homeTeam"]), ("draw", o.get("draw"), "Draw"),
+                 ("away", o.get("away"), m["awayTeam"])]
+        cands = [c for c in cands if isinstance(c[1], (int, float))]
+        if not cands:
+            continue
+        cands.sort(key=lambda c: c[1])
+        sel, odds, team = cands[0]
+        stake = 25 + random.randint(0, 75)
+        if bal < stake or DRY:
+            if DRY:
+                print(f"WOULD LR-bet {d.id}: {sel} ({team}) @ {odds} stake {stake}")
+            continue
+        db.collection("bets").add({
+            "userId": LR, "userEmail": "lillyrose@ai.local", "userDisplayName": "LillyRose 🤖",
+            "matchId": d.id, "matchLabel": f"{m['homeTeam']} vs {m['awayTeam']}",
+            "market": "1x2", "marketLabel": "Match result · 1X2",
+            "selection": sel, "selectionLabel": ("Draw" if sel == "draw" else f"{team} win"),
+            "stake": stake, "odds": odds, "status": "open",
+            "placedAt": firestore.SERVER_TIMESTAMP, "isAI": True,
+        })
+        uref.update({"balance": firestore.Increment(-stake)})
+        bal -= stake
+        already.add(d.id)
+        placed += 1
+    if placed:
+        print(f"LillyRose auto-bet {placed} match(es)")
+    return placed
 
 
 def _pred(bet: dict) -> dict:
