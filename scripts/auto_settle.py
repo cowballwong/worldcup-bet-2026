@@ -146,24 +146,34 @@ def _fetch_live() -> dict:
             home = (t.get("home") or {}).get("name", "")
             away = (t.get("away") or {}).get("name", "")
             minute = "HT" if st.get("short") == "HT" else (st.get("elapsed") or "")
-            # Count yellow / red cards per side from the events array (free — it's
-            # already in the live=all payload, no extra request).
-            cards = {"home": {"y": 0, "r": 0}, "away": {"y": 0, "r": 0}}
+            # Full event timeline (goals + cards) with scorer/bookee name + minute,
+            # straight from the live=all events array (free, no extra request).
+            events = []
             for e in (f.get("events") or []):
-                if e.get("type") != "Card":
-                    continue
+                typ = e.get("type")
+                det = (e.get("detail") or "")
                 tn = _norm((e.get("team") or {}).get("name", ""))
                 side = "home" if tn == _norm(home) else ("away" if tn == _norm(away) else None)
-                if not side:
+                if side is None:
                     continue
-                det = (e.get("detail") or "").lower()
-                if "red" in det or "second yellow" in det:
-                    cards[side]["r"] += 1
-                elif "yellow" in det:
-                    cards[side]["y"] += 1
+                tm = e.get("time") or {}
+                mn = tm.get("elapsed")
+                mdisp = (f"{mn}+{tm.get('extra')}'" if tm.get("extra") else f"{mn}'") if mn is not None else ""
+                player = (e.get("player") or {}).get("name", "") or ""
+                if typ == "Goal":
+                    icon = "⚽"
+                    if "own" in det.lower():
+                        icon = "⚽(OG)"
+                    elif "penalty" in det.lower():
+                        icon = "⚽(P)"
+                elif typ == "Card":
+                    icon = "🟥" if ("red" in det.lower() or "second yellow" in det.lower()) else "🟨"
+                else:
+                    continue  # skip subs / VAR
+                events.append({"side": side, "icon": icon, "player": player, "min": mdisp})
             out[f"{_norm(home)}|{_norm(away)}"] = {
                 "home": int(g.get("home") or 0), "away": int(g.get("away") or 0),
-                "minute": minute, "cards": cards}
+                "minute": minute, "events": events}
         return out
     except Exception:
         return {}

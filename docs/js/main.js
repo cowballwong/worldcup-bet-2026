@@ -396,15 +396,16 @@ function myBetRemark(matchId) {
   return `<div class="my-bet-remark">🎟️ 你已落注:${chips}</div>`;
 }
 
-// Live yellow/red card tally (shown on in-play cards). liveScore.cards is
-// written by auto_settle from the API-Football events feed.
+// Live event timeline — goals + cards with scorer/bookee name + minute.
+// liveScore.events is written by auto_settle from the API-Football events feed.
 function liveCards(m) {
-  if (m.status !== 'live' || !m.liveScore || !m.liveScore.cards) return '';
-  const c = m.liveScore.cards, h = c.home || {}, a = c.away || {};
-  const tot = (h.y || 0) + (h.r || 0) + (a.y || 0) + (a.r || 0);
-  if (!tot) return '';
-  const cell = x => (((x.y ? '🟨'.repeat(x.y) : '') + (x.r ? '🟥'.repeat(x.r) : '')) || '—');
-  return `<div class="live-cards"><span>${cell(h)}</span><span class="lc-mid">cards 牌</span><span>${cell(a)}</span></div>`;
+  if (m.status !== 'live' || !m.liveScore || !Array.isArray(m.liveScore.events) || !m.liveScore.events.length) return '';
+  const rows = m.liveScore.events.map(e => {
+    const flag = e.side === 'home' ? (m.homeFlag || '') : (m.awayFlag || '');
+    const nm = (e.player || '').split(' ').slice(-1)[0] || e.player || '';
+    return `<div class="le-row ${e.side}"><span class="le-min">${e.min}</span><span class="le-ic">${e.icon}</span><span class="le-pl">${flag} ${nm}</span></div>`;
+  }).join('');
+  return `<div class="live-events">${rows}</div>`;
 }
 
 // Bilingual team label, with fallback to slot placeholder for knockout TBDs.
