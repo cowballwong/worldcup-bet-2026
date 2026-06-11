@@ -75,7 +75,9 @@ def _send_telegram(text: str) -> None:
 
 
 def _fetch_wc() -> dict:
-    """Return {normalized 'home|away': match} for FINISHED WC fixtures."""
+    """Return {normalized 'home|away': match} for ALL WC fixtures (football-data).
+    Used for FINAL settlement — football-data free updates finished matches +
+    score (delayed) and has a generous quota; its free tier has NO live data."""
     key = _env("FOOTBALL_DATA_API_KEY")
     req = urllib.request.Request(WC_URL, headers={"X-Auth-Token": key or ""})
     with urllib.request.urlopen(req, timeout=30) as r:
@@ -86,6 +88,69 @@ def _fetch_wc() -> dict:
         away = (m.get("awayTeam") or {}).get("name", "")
         out[f"{_norm(home)}|{_norm(away)}"] = m
     return out
+
+
+# ── API-Football (api-sports.io) — LIVE in-play scores ──────────────────────
+# Free plan can't query the 2026 season by date, BUT the `fixtures?live=all`
+# endpoint works and returns live WC matches. Quota is only 100 req/DAY, so we
+# count calls in a state file and hard-stop near the cap (finals still settle via
+# football-data, which is unaffected).
+QUOTA_FILE = Path(__file__).resolve().parent.parent / "state" / "apisports_quota.json"
+AF_DAILY_CAP = 90
+AF_LIVE_SHORTS = {"1H", "2H", "ET", "BT", "P", "HT", "LIVE", "INT"}
+
+
+def _af_quota_ok_and_bump() -> bool:
+    """True if we may make one more API-Football call today; records the call."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    data = {"date": today, "count": 0}
+    try:
+        if QUOTA_FILE.exists():
+            data = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
+            if data.get("date") != today:
+                data = {"date": today, "count": 0}
+    except (OSError, json.JSONDecodeError):
+        data = {"date": today, "count": 0}
+    if data.get("count", 0) >= AF_DAILY_CAP:
+        return False
+    data["count"] = data.get("count", 0) + 1
+    try:
+        QUOTA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        QUOTA_FILE.write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        pass
+    return True
+
+
+def _fetch_live() -> dict:
+    """Return {normalized 'home|away': {home,away,minute}} for live WC matches.
+    Empty dict if over the daily quota or on any error (non-fatal)."""
+    key = _env("APISPORTS_KEY")
+    if not key or not _af_quota_ok_and_bump():
+        return {}
+    try:
+        req = urllib.request.Request("https://v3.football.api-sports.io/fixtures?live=all",
+                                     headers={"x-apisports-key": key})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read())
+        out = {}
+        for f in data.get("response", []) or []:
+            lg = f.get("league") or {}
+            if lg.get("id") != 1 and lg.get("name") != "World Cup":
+                continue
+            t = f.get("teams") or {}
+            g = f.get("goals") or {}
+            st = (f.get("fixture") or {}).get("status") or {}
+            if st.get("short") not in AF_LIVE_SHORTS:
+                continue
+            home = (t.get("home") or {}).get("name", "")
+            away = (t.get("away") or {}).get("name", "")
+            minute = "HT" if st.get("short") == "HT" else (st.get("elapsed") or "")
+            out[f"{_norm(home)}|{_norm(away)}"] = {
+                "home": int(g.get("home") or 0), "away": int(g.get("away") or 0), "minute": minute}
+        return out
+    except Exception:
+        return {}
 
 
 # ── settlement rules — must mirror docs/js/markets.js ───────────────────────
@@ -142,37 +207,32 @@ def main():
             ko = datetime.fromisoformat((m.get("kickoffISO", "") or "").replace("Z", "+00:00"))
         except ValueError:
             return False
-        return ko <= now <= ko + timedelta(hours=6) and m.get("homeTeam") not in (None, "", "TBD")
+        return ko <= now <= ko + timedelta(hours=3) and m.get("homeTeam") not in (None, "", "TBD")
     pending = [(mid, m) for mid, m in all_matches if _pending(m)]
     if not pending:
         print("no recently-kicked-off unsettled match — skip API call")
         return
 
     wc = _fetch_wc()
-    print(f"football-data: {len(wc)} WC fixtures fetched · {len(pending)} pending our side")
+    live = _fetch_live()  # API-Football live (quota-guarded; {} if over cap)
+    print(f"football-data: {len(wc)} fixtures · API-Football live: {len(live)} · {len(pending)} pending our side")
     settled_count = 0
     live_count = 0
     for mid, m in pending:
         home, away = m.get("homeTeam", ""), m.get("awayTeam", "")
-        api = wc.get(f"{_norm(home)}|{_norm(away)}")
-        if not api:
-            continue
-        st = api.get("status")
-        # LIVE: match in progress → push the running score to the player cards.
-        if st in ("IN_PLAY", "PAUSED"):
-            sc = api.get("score") or {}
-            ft = sc.get("fullTime") or {}
-            if ft.get("home") is not None and ft.get("away") is not None:
-                live = {"home": int(ft["home"]), "away": int(ft["away"]),
-                        "minute": api.get("minute") or ("HT" if st == "PAUSED" else "")}
+        key = f"{_norm(home)}|{_norm(away)}"
+        api = wc.get(key)
+        # If football-data hasn't marked it FINISHED yet, try a LIVE in-play update
+        # from API-Football instead (then move on — settle on a later tick).
+        if not api or api.get("status") != "FINISHED":
+            lv = live.get(key)
+            if lv:
                 if DRY:
-                    print(f"WOULD live-update {mid}: {home} {live['home']}-{live['away']} {away} ({live['minute']})")
+                    print(f"WOULD live-update {mid}: {home} {lv['home']}-{lv['away']} {away} ({lv['minute']})")
                 else:
                     db.collection("matches").document(mid).update({
-                        "status": "live", "liveScore": live, "updatedAt": firestore.SERVER_TIMESTAMP})
+                        "status": "live", "liveScore": lv, "updatedAt": firestore.SERVER_TIMESTAMP})
                 live_count += 1
-            continue
-        if st != "FINISHED":
             continue
         sc = api.get("score") or {}
         ft = sc.get("fullTime") or {}
