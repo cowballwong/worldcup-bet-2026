@@ -453,3 +453,22 @@ img.emoji {
 [data-theme="dark"] .lb-champ.none { color: #475569; }
 [data-theme="dark"] .lb-champ.win { color: #86efac; }
 [data-theme="dark"] .lb-champ.miss { color: #fca5a5; }
+
+/* Next-match pin + finished-match prediction reveal */
+.status-badge.next { background: #f59e0b; color: #fff; }
+.match-card.is-next { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b; }
+[data-theme="dark"] .match-card.is-next { border-color: #f59e0b; }
+.preds { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.preds-h { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
+.pred-row { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 3px 0; }
+.pred-row .pred-ic { flex-shrink: 0; }
+.pred-row .pred-who { font-weight: 600; white-space: nowrap; }
+.pred-row .pred-pick { color: #64748b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pred-row .pred-res { font-family: ui-monospace, monospace; font-weight: 700; flex-shrink: 0; }
+.pred-row.won .pred-res { color: #16a34a; }
+.pred-row.lost .pred-res { color: #dc2626; }
+[data-theme="dark"] .preds { border-top-color: #334155; }
+[data-theme="dark"] .preds-h { color: #94a3b8; }
+[data-theme="dark"] .pred-row .pred-pick { color: #94a3b8; }
+[data-theme="dark"] .pred-row.won .pred-res { color: #4ade80; }
+[data-theme="dark"] .pred-row.lost .pred-res { color: #f87171; }

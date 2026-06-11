@@ -23,6 +23,8 @@ let currentUser = null;
 let currentUserDoc = null;
 let matchesCache = new Map();   // id → match doc data
 let myBetsByMatch = new Map();  // matchId → [my bets on that match]
+let resultsByMatch = new Map(); // matchId → public prediction summary (post-settlement)
+let unsubResults = null;
 let adminEmails = [];
 let unsubMatches = null;
 let unsubLeaderboard = null;
@@ -142,6 +144,7 @@ onAuthStateChanged(auth, async (user) => {
   subscribeMyChampion();
   subscribeChampionOdds();
   subscribeAllChampions();
+  subscribeResults();
 });
 
 // ── LillyRose AI bets subscription ─────────────────────────────
@@ -236,6 +239,40 @@ function subscribeMatches() {
   });
 }
 
+// Public per-match prediction summaries (written by admin at settlement).
+function subscribeResults() {
+  if (unsubResults) unsubResults();
+  unsubResults = onSnapshot(collection(db, 'results'), snap => {
+    resultsByMatch = new Map();
+    snap.forEach(d => resultsByMatch.set(d.id, d.data()));
+    if (matchesCache.size) renderMatches(Array.from(matchesCache.values()));
+  }, () => {});
+}
+
+// Who predicted what on a finished match (revealed after settlement).
+function matchPredictions(matchId) {
+  const r = resultsByMatch.get(matchId);
+  if (!r || !Array.isArray(r.predictions) || r.predictions.length === 0) return '';
+  const rows = [...r.predictions].sort((a, b) => (b.status === 'won') - (a.status === 'won'));
+  const items = rows.map(p => {
+    const won = p.status === 'won';
+    const who = p.isAI ? `🤖 ${p.displayName}` : p.displayName;
+    const res = won ? `+${p.payout ?? Math.round(p.stake * p.odds)}` : `-${p.stake}`;
+    return `
+      <div class="pred-row ${won ? 'won' : 'lost'}">
+        <span class="pred-ic">${won ? '✅' : '❌'}</span>
+        <span class="pred-who">${who}</span>
+        <span class="pred-pick">${p.selectionLabel || p.marketLabel} @ ${p.odds}</span>
+        <span class="pred-res">${res}</span>
+      </div>`;
+  }).join('');
+  return `
+    <div class="preds">
+      <div class="preds-h">🏁 ${r.winners}/${r.total} 估中 · 結果</div>
+      ${items}
+    </div>`;
+}
+
 function renderMatches(matches) {
   // Player view only shows group-stage + scheduled knockout matches with kickoff
   // ahead. Knockout slot labels handled by formatTeam().
@@ -247,12 +284,26 @@ function renderMatches(matches) {
   }
   $('match-count').textContent = `${matches.length} match${matches.length === 1 ? '' : 'es'}`;
 
-  const html = matches.map(m => {
+  // Order: live now → upcoming (soonest first, "NEXT" pinned on top) → finished
+  // (most recent first, with the prediction reveal underneath).
+  const now = Date.now();
+  const koMs = m => new Date(m.kickoffISO).getTime();
+  const isSettled = m => m.status === 'settled';
+  const isLive = m => !isSettled(m) && (m.status === 'live' || koMs(m) <= now);
+  const isUpcoming = m => !isSettled(m) && !isLive(m);
+  const liveM = matches.filter(isLive).sort((a, b) => koMs(a) - koMs(b));
+  const upM = matches.filter(isUpcoming).sort((a, b) => koMs(a) - koMs(b));
+  const finM = matches.filter(isSettled).sort((a, b) => koMs(b) - koMs(a));
+  const nextId = upM.length ? upM[0].id : null;
+  const ordered = [...liveM, ...upM, ...finM];
+
+  const html = ordered.map(m => {
     const ko = new Date(m.kickoffISO);
     const isClosed = m.status === 'settled' || isPastKickoff(m);
-    const cls = m.status === 'settled' ? 'match-card is-settled'
+    const isNext = m.id === nextId;
+    const cls = (m.status === 'settled' ? 'match-card is-settled'
               : isClosed ? 'match-card is-closed'
-              : 'match-card';
+              : 'match-card') + (isNext ? ' is-next' : '');
 
     // Score area: final > live > pre-match "vs"
     let scoreHtml;
@@ -269,6 +320,7 @@ function renderMatches(matches) {
       <div class="${cls}" data-match-id="${m.id}">
         <div class="flex items-center justify-between gap-2 text-xs text-slate-500 mb-2 flex-wrap">
           <span class="flex items-center gap-2">
+            ${isNext ? '<span class="status-badge next">▶ NEXT</span>' : ''}
             <span class="status-badge ${m.status}">${m.status}</span>
             <span>${formatKickoff(ko)}</span>
             <span>· ${stageLabel}</span>
@@ -288,6 +340,7 @@ function renderMatches(matches) {
         </div>
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
         ${myBetRemark(m.id)}
+        ${m.status === 'settled' ? matchPredictions(m.id) : ''}
       </div>
     `;
   }).join('');

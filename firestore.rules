@@ -110,6 +110,15 @@ service cloud.firestore {
                                 && resource.data.status == 'open');
     }
 
+    // ── results ───────────────────────────────────────────────
+    // Per-match prediction summary written by the admin at settlement so EVERY
+    // player can see who predicted what once a match is over (bets themselves
+    // stay private before kickoff; this only reveals them post-settlement).
+    match /results/{matchId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // ── champions ─────────────────────────────────────────────
     // "Predict the champion" — one doc per user, keyed by uid. No stake; a
     // correct pick is paid (100 x locked outright odds) by the admin settlement.

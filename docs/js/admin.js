@@ -256,45 +256,67 @@ async function saveMatch(forSettle) {
 
 async function settleMatch(match) {
   setStatus('Settling bets…', false);
-  // Read all bets on this match; filter to open client-side
-  // (avoids a composite index for matchId + status).
+  // Read ALL bets on this match (one query; filter client-side).
   const betsSnap = await getDocs(query(collection(db, 'bets'),
     where('matchId', '==', match.id)));
+  const allBets = [];
   const openBets = [];
   betsSnap.forEach(d => {
-    const data = d.data();
-    if (data.status === 'open') openBets.push({ docId: d.id, ...data });
+    const data = { docId: d.id, ...d.data() };
+    allBets.push(data);
+    if (data.status === 'open') openBets.push(data);
   });
 
-  if (openBets.length === 0) {
-    setStatus('Saved. No open bets to settle.', false);
-    setTimeout(closeMatchModal, 800);
-    return;
+  // Evaluate the still-open ones and credit winners.
+  const updates = openBets.length ? settleBetsForMatch(match, openBets) : [];
+  const finalByDoc = new Map();  // docId -> {status, payout}
+  if (updates.length) {
+    const batch = writeBatch(db);
+    const credits = new Map();
+    for (const u of updates) {
+      batch.update(doc(db, 'bets', u.docId), {
+        status: u.status, payout: u.payout || 0, settledAt: serverTimestamp(),
+      });
+      finalByDoc.set(u.docId, { status: u.status, payout: u.payout || 0 });
+      if (u.payout && u.payout > 0) credits.set(u.userId, (credits.get(u.userId) || 0) + u.payout);
+    }
+    for (const [uid, cr] of credits.entries()) {
+      batch.update(doc(db, 'users', uid), { balance: increment(cr) });
+    }
+    await batch.commit();
   }
 
-  // Evaluate
-  const updates = settleBetsForMatch(match, openBets);
+  // Build the public per-match prediction summary (everyone can read this).
+  const predictions = allBets.map(b => {
+    const fin = finalByDoc.get(b.docId);
+    const status = fin ? fin.status : b.status;       // freshly-settled or already-settled
+    const payout = fin ? fin.payout : (b.payout || 0);
+    return {
+      userId: b.userId,
+      displayName: b.userDisplayName || b.userEmail || 'Player',
+      market: b.market || '', marketLabel: b.marketLabel || '',
+      selection: b.selection || '', selectionLabel: b.selectionLabel || '',
+      odds: b.odds || 0, stake: b.stake || 0,
+      status, payout, isAI: !!b.isAI,
+    };
+  }).filter(p => p.status === 'won' || p.status === 'lost');  // only decided bets
 
-  // Atomic batch: write bet status + credit winnings to each user
-  const batch = writeBatch(db);
-  // Group payouts per user
-  const credits = new Map();
-  for (const u of updates) {
-    const ref = doc(db, 'bets', u.docId);
-    batch.update(ref, {
-      status: u.status, payout: u.payout || 0,
+  try {
+    await setDoc(doc(db, 'results', match.id), {
+      matchId: match.id,
+      homeTeam: match.homeTeam || '', awayTeam: match.awayTeam || '',
+      finalScore: match.finalScore || null,
+      predictions,
+      winners: predictions.filter(p => p.status === 'won').length,
+      total: predictions.length,
       settledAt: serverTimestamp(),
     });
-    if (u.payout && u.payout > 0) {
-      credits.set(u.userId, (credits.get(u.userId) || 0) + u.payout);
-    }
+  } catch (e) {
+    console.error('results write failed', e);
   }
-  for (const [uid, cr] of credits.entries()) {
-    batch.update(doc(db, 'users', uid), { balance: increment(cr) });
-  }
-  await batch.commit();
-  setStatus(`Settled ${updates.length} bets. ${credits.size} winners credited.`, false);
-  setTimeout(closeMatchModal, 1200);
+
+  setStatus(`Settled ${updates.length} bet(s). ${predictions.length} prediction(s) recorded.`, false);
+  setTimeout(closeMatchModal, 1300);
 }
 
 function setStatus(msg, isErr) {
