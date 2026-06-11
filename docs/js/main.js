@@ -346,6 +346,7 @@ function renderMatches(matches) {
             ${formatTeam(m.awayTeam, m.awaySlot)}
           </div>
         </div>
+        ${liveCards(m)}
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
         ${myBetRemark(m.id)}
         ${m.status === 'settled' ? matchPredictions(m.id) : ''}
@@ -393,6 +394,17 @@ function myBetRemark(matchId) {
     return `<span class="mbr-chip ${cls}">${b.selectionLabel || b.marketLabel} @ ${b.odds} · ${res}</span>`;
   }).join('');
   return `<div class="my-bet-remark">🎟️ 你已落注:${chips}</div>`;
+}
+
+// Live yellow/red card tally (shown on in-play cards). liveScore.cards is
+// written by auto_settle from the API-Football events feed.
+function liveCards(m) {
+  if (m.status !== 'live' || !m.liveScore || !m.liveScore.cards) return '';
+  const c = m.liveScore.cards, h = c.home || {}, a = c.away || {};
+  const tot = (h.y || 0) + (h.r || 0) + (a.y || 0) + (a.r || 0);
+  if (!tot) return '';
+  const cell = x => (((x.y ? '🟨'.repeat(x.y) : '') + (x.r ? '🟥'.repeat(x.r) : '')) || '—');
+  return `<div class="live-cards"><span>${cell(h)}</span><span class="lc-mid">cards 牌</span><span>${cell(a)}</span></div>`;
 }
 
 // Bilingual team label, with fallback to slot placeholder for knockout TBDs.

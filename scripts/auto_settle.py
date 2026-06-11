@@ -146,8 +146,24 @@ def _fetch_live() -> dict:
             home = (t.get("home") or {}).get("name", "")
             away = (t.get("away") or {}).get("name", "")
             minute = "HT" if st.get("short") == "HT" else (st.get("elapsed") or "")
+            # Count yellow / red cards per side from the events array (free — it's
+            # already in the live=all payload, no extra request).
+            cards = {"home": {"y": 0, "r": 0}, "away": {"y": 0, "r": 0}}
+            for e in (f.get("events") or []):
+                if e.get("type") != "Card":
+                    continue
+                tn = _norm((e.get("team") or {}).get("name", ""))
+                side = "home" if tn == _norm(home) else ("away" if tn == _norm(away) else None)
+                if not side:
+                    continue
+                det = (e.get("detail") or "").lower()
+                if "red" in det or "second yellow" in det:
+                    cards[side]["r"] += 1
+                elif "yellow" in det:
+                    cards[side]["y"] += 1
             out[f"{_norm(home)}|{_norm(away)}"] = {
-                "home": int(g.get("home") or 0), "away": int(g.get("away") or 0), "minute": minute}
+                "home": int(g.get("home") or 0), "away": int(g.get("away") or 0),
+                "minute": minute, "cards": cards}
         return out
     except Exception:
         return {}

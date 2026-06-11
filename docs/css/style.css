@@ -476,3 +476,7 @@ img.emoji {
 /* Sticky tab bar under the sticky header */
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }
 [data-theme="dark"] #tabbar { background: #0f172a; }
+
+/* Live yellow/red card tally on in-play match cards */
+.live-cards { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; font-size:13px; }
+.live-cards .lc-mid { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; }
