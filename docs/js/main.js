@@ -355,17 +355,17 @@ function renderMatches(matches) {
   }).join('');
   root.innerHTML = html;
 
-  // Auto-scroll to the next match ONCE per load — but ONLY when finished matches
-  // sit above it (so it's actually off-screen). If the next match is already the
-  // first card, leave the page at the top so the "Upcoming matches" heading and
-  // the highlighted card both stay in view.
-  if (nextId && !window.__wcScrolledToNext) {
+  // Auto-scroll to the next match whenever it CHANGES — on first load, AND when a
+  // match just finished so "next" advances to the following game (live Firestore
+  // update re-renders this). Skip when the next match is already the first card
+  // (nothing finished sits above it → keep the "Upcoming" heading in view).
+  if (nextId && nextId !== window.__wcScrolledNextId) {
     const idx = matches.findIndex(m => m.id === nextId);
     if (idx > 0) {
       const nx = root.querySelector('.match-card.is-next');
       if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
     }
-    window.__wcScrolledToNext = true;
+    window.__wcScrolledNextId = nextId;
   }
 
   root.querySelectorAll('.match-card').forEach(card => {

@@ -171,12 +171,36 @@ def _fetch_live() -> dict:
                 else:
                     continue  # skip subs / VAR
                 events.append({"side": side, "icon": icon, "player": player, "min": mdisp})
+            htsc = (f.get("score") or {}).get("halftime") or {}
             out[f"{_norm(home)}|{_norm(away)}"] = {
                 "home": int(g.get("home") or 0), "away": int(g.get("away") or 0),
-                "minute": minute, "events": events}
+                "minute": minute, "events": events,
+                "fixture_id": (f.get("fixture") or {}).get("id"),
+                "halftime": ({"home": int(htsc["home"]), "away": int(htsc["away"])}
+                             if htsc.get("home") is not None and htsc.get("away") is not None else None)}
         return out
     except Exception:
         return {}
+
+
+AF_FINISHED = {"FT", "AET", "PEN"}
+
+
+def _af_fixture(fid) -> dict | None:
+    """Query ONE API-Football fixture by id (works on the free plan, unlike the
+    season/date queries). Returns the raw fixture dict or None. Quota-guarded."""
+    key = _env("APISPORTS_KEY")
+    if not key or not fid or not _af_quota_ok_and_bump():
+        return None
+    try:
+        req = urllib.request.Request(f"https://v3.football.api-sports.io/fixtures?id={fid}",
+                                     headers={"x-apisports-key": key})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read())
+        resp = data.get("response") or []
+        return resp[0] if resp else None
+    except Exception:
+        return None
 
 
 # ── settlement rules — must mirror docs/js/markets.js ───────────────────────
@@ -239,42 +263,47 @@ def main():
             ko = datetime.fromisoformat((m.get("kickoffISO", "") or "").replace("Z", "+00:00"))
         except ValueError:
             return False
-        return ko <= now <= ko + timedelta(hours=3) and m.get("homeTeam") not in (None, "", "TBD")
+        return ko <= now <= ko + timedelta(hours=12) and m.get("homeTeam") not in (None, "", "TBD")
     pending = [(mid, m) for mid, m in all_matches if _pending(m)]
     if not pending:
         print("no recently-kicked-off unsettled match — skip API call")
         return
 
-    wc = _fetch_wc()
-    live = _fetch_live()  # API-Football live (quota-guarded; {} if over cap)
-    print(f"football-data: {len(wc)} fixtures · API-Football live: {len(live)} · {len(pending)} pending our side")
+    live = _fetch_live()  # API-Football live=all (quota-guarded; {} if over cap)
+    print(f"API-Football live: {len(live)} · {len(pending)} pending our side")
     settled_count = 0
     live_count = 0
     for mid, m in pending:
         home, away = m.get("homeTeam", ""), m.get("awayTeam", "")
         key = f"{_norm(home)}|{_norm(away)}"
-        api = wc.get(key)
-        # If football-data hasn't marked it FINISHED yet, try a LIVE in-play update
-        # from API-Football instead (then move on — settle on a later tick).
-        if not api or api.get("status") != "FINISHED":
-            lv = live.get(key)
-            if lv:
-                if DRY:
-                    print(f"WOULD live-update {mid}: {home} {lv['home']}-{lv['away']} {away} ({lv['minute']})")
-                else:
-                    db.collection("matches").document(mid).update({
-                        "status": "live", "liveScore": lv, "updatedAt": firestore.SERVER_TIMESTAMP})
-                live_count += 1
+        lv = live.get(key)
+        # LIVE now → push score + event timeline to the card; remember the API
+        # fixture id so we can fetch the FINAL by-id once it's over.
+        if lv:
+            if DRY:
+                print(f"WOULD live-update {mid}: {home} {lv['home']}-{lv['away']} {away} ({lv['minute']})")
+            else:
+                db.collection("matches").document(mid).update({
+                    "status": "live", "liveScore": lv,
+                    "apiFixtureId": lv.get("fixture_id") or m.get("apiFixtureId"),
+                    "updatedAt": firestore.SERVER_TIMESTAMP})
+            live_count += 1
             continue
-        sc = api.get("score") or {}
-        ft = sc.get("fullTime") or {}
-        htsc = sc.get("halfTime") or {}
-        if ft.get("home") is None or ft.get("away") is None:
+        # Not live now → may be finished. Fetch the final by fixture id (free-OK).
+        fid = m.get("apiFixtureId")
+        fx = _af_fixture(fid) if fid else None
+        if not fx:
             continue
-        final_score = {"home": int(ft["home"]), "away": int(ft["away"])}
+        if (((fx.get("fixture") or {}).get("status") or {}).get("short")) not in AF_FINISHED:
+            continue
+        g = fx.get("goals") or {}
+        if g.get("home") is None or g.get("away") is None:
+            continue
+        final_score = {"home": int(g["home"]), "away": int(g["away"])}
+        htsc = (fx.get("score") or {}).get("halftime") or {}
         half_score = ({"home": int(htsc["home"]), "away": int(htsc["away"])}
                       if htsc.get("home") is not None and htsc.get("away") is not None else None)
-
+        api = fx  # _pen_winner reads score.penalty
         line = f"{home} {final_score['home']}-{final_score['away']} {away}"
         if DRY:
             print(f"WOULD settle: {mid}  {line}  (HT {half_score})")
@@ -348,8 +377,10 @@ def main():
 
 
 def _pen_winner(api: dict, home: str, away: str):
-    """If the final went to penalties, football-data carries score.penalties."""
-    pens = (api.get("score") or {}).get("penalties") or {}
+    """Penalty-shootout winner. API-Football carries score.penalty; football-data
+    used score.penalties — accept either."""
+    sc = api.get("score") or {}
+    pens = sc.get("penalty") or sc.get("penalties") or {}
     if pens.get("home") is not None and pens.get("away") is not None:
         if pens["home"] > pens["away"]:
             return home
