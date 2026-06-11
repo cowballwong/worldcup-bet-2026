@@ -126,6 +126,7 @@ onAuthStateChanged(auth, async (user) => {
   } catch (e) { adminEmails = []; }
   if (adminEmails.includes(user.email)) {
     $('admin-link').classList.remove('hidden');
+    document.getElementById('admin-link-top')?.classList.remove('hidden');
   }
 
   // Ensure user doc exists, create with starting balance if new
