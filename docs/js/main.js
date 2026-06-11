@@ -403,7 +403,7 @@ function liveCards(m) {
   const rows = m.liveScore.events.map(e => {
     const flag = e.side === 'home' ? (m.homeFlag || '') : (m.awayFlag || '');
     const nm = (e.player || '').split(' ').slice(-1)[0] || e.player || '';
-    return `<div class="le-row ${e.side}"><span class="le-min">${e.min}</span><span class="le-ic">${e.icon}</span><span class="le-pl">${flag} ${nm}</span></div>`;
+    return `<div class="le-row"><span class="le-min">${e.min}</span><span class="le-ic">${e.icon}</span><span class="le-fl">${flag}</span><span class="le-pl">${nm}</span></div>`;
   }).join('');
   return `<div class="live-events">${rows}</div>`;
 }

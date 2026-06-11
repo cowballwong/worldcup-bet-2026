@@ -477,12 +477,12 @@ img.emoji {
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }
 [data-theme="dark"] #tabbar { background: #0f172a; }
 
-/* Live event timeline (goals + cards w/ name + minute) on in-play cards */
-.live-events { margin-top:8px; padding-top:6px; border-top:1px dashed #e2e8f0; display:flex; flex-direction:column; gap:3px; }
-.le-row { display:flex; align-items:center; gap:8px; font-size:12px; }
-.le-row.away { flex-direction:row-reverse; text-align:right; }
-.le-min { font-family:ui-monospace,monospace; color:#64748b; min-width:34px; }
-.le-ic { width:18px; text-align:center; }
-.le-pl { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Live event timeline (goals + cards w/ name + minute) — centered single column */
+.live-events { margin:8px auto 0; padding-top:6px; border-top:1px dashed #e2e8f0; display:flex; flex-direction:column; gap:3px; max-width:300px; }
+.le-row { display:flex; align-items:center; gap:7px; font-size:12px; white-space:nowrap; }
+.le-min { font-family:ui-monospace,monospace; color:#64748b; min-width:32px; text-align:right; }
+.le-ic { width:16px; text-align:center; }
+.le-fl { width:18px; text-align:center; }
+.le-pl { overflow:hidden; text-overflow:ellipsis; }
 [data-theme="dark"] .live-events { border-top-color:#334155; }
 [data-theme="dark"] .le-min { color:#94a3b8; }
