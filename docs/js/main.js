@@ -65,6 +65,19 @@ function _installEmojiObserver() {
 }
 _installEmojiObserver();
 
+// Keep the tab bar stuck directly under the sticky header (its top offset must
+// equal the header's height, which varies a little by viewport).
+(function stickTabsUnderHeader() {
+  function place() {
+    const h = document.querySelector('header');
+    const t = document.getElementById('tabbar');
+    if (h && t) t.style.top = h.offsetHeight + 'px';
+  }
+  place();
+  window.addEventListener('resize', place);
+  window.addEventListener('load', place);
+})();
+
 // ── Theme toggle ───────────────────────────────────────────────
 const themeBtn = $('theme-btn');
 function applyTheme(t) {

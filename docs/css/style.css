@@ -456,7 +456,7 @@ img.emoji {
 
 /* Next-match pin + finished-match prediction reveal */
 .status-badge.next { background: #f59e0b; color: #fff; }
-.match-card.is-next { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b; scroll-margin-top: 88px; }
+.match-card.is-next { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b; scroll-margin-top: 112px; }
 [data-theme="dark"] .match-card.is-next { border-color: #f59e0b; }
 .preds { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
 .preds-h { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
@@ -472,3 +472,7 @@ img.emoji {
 [data-theme="dark"] .pred-row .pred-pick { color: #94a3b8; }
 [data-theme="dark"] .pred-row.won .pred-res { color: #4ade80; }
 [data-theme="dark"] .pred-row.lost .pred-res { color: #f87171; }
+
+/* Sticky tab bar under the sticky header */
+#tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }
+[data-theme="dark"] #tabbar { background: #0f172a; }
