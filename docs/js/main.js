@@ -485,16 +485,18 @@ let activeMatch = null;
 let activeMarket = '1x2';
 let activeSelection = null;
 let activeOdds = null;
+let editingBet = null;  // {id, stake} when modifying an existing open bet; null = fresh
 
-function openBetModal(matchId) {
+function openBetModal(matchId, existingBet = null) {
   activeMatch = matchesCache.get(matchId);
   if (!activeMatch) return;
-  activeMarket = '1x2';
+  editingBet = existingBet ? { id: existingBet.id, stake: existingBet.stake } : null;
+  activeMarket = (existingBet && MARKETS[existingBet.market]) ? existingBet.market : '1x2';
   activeSelection = null;
   activeOdds = null;
 
-  $('bet-modal-title').innerHTML = `${activeMatch.homeFlag} ${teamLabel(activeMatch.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(activeMatch.awayTeam)} ${activeMatch.awayFlag}`;
-  $('bet-modal-subtitle').textContent = formatKickoff(new Date(activeMatch.kickoffISO)) + (activeMatch.venue ? ` · ${activeMatch.venue}` : '');
+  $('bet-modal-title').innerHTML = `${existingBet ? '✏️ ' : ''}${activeMatch.homeFlag} ${teamLabel(activeMatch.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(activeMatch.awayTeam)} ${activeMatch.awayFlag}`;
+  $('bet-modal-subtitle').textContent = (existingBet ? '改注 · edit your bet · ' : '') + formatKickoff(new Date(activeMatch.kickoffISO)) + (activeMatch.venue ? ` · ${activeMatch.venue}` : '');
 
   // Populate market dropdown
   const marketSel = $('bet-market');
@@ -503,7 +505,20 @@ function openBetModal(matchId) {
   marketSel.value = activeMarket;
 
   renderSelections();
-  $('bet-stake').value = 10;
+  // Pre-fill when editing: re-select the same selection + stake.
+  if (existingBet) {
+    const row = $('bet-selections').querySelector(`.bet-selection-row[data-code="${existingBet.selection}"]`);
+    if (row) {
+      row.classList.add('is-selected');
+      activeSelection = row.dataset.code;
+      activeOdds = parseFloat(row.dataset.odds);
+    }
+    $('bet-stake').value = existingBet.stake;
+  } else {
+    $('bet-stake').value = 10;
+  }
+  const confirmBtn = $('bet-confirm');
+  if (confirmBtn) confirmBtn.textContent = existingBet ? 'Update bet · 更新' : 'Confirm bet · 落注';
   updateSummary();
   $('bet-error').classList.add('hidden');
   $('bet-modal').classList.remove('hidden');
@@ -515,6 +530,7 @@ $('bet-modal').addEventListener('click', e => { if (e.target === $('bet-modal'))
 function closeBetModal() {
   $('bet-modal').classList.add('hidden');
   $('bet-modal').classList.remove('flex');
+  editingBet = null;  // cancelling an edit must NOT touch the original bet
 }
 
 $('bet-market').addEventListener('change', e => {
@@ -575,12 +591,29 @@ async function placeBet() {
     return showBetErr(`Stake must be between ${APP_CONFIG.minStake} and ${APP_CONFIG.maxStake}.`);
   }
   if (isPastKickoff(activeMatch)) return showBetErr('Betting is closed for this match.');
-  if (!currentUserDoc || currentUserDoc.balance < stake) {
+  const refund = editingBet ? editingBet.stake : 0;  // editing refunds the old stake first
+  if (!currentUserDoc || (currentUserDoc.balance + refund) < stake) {
     return showBetErr(`Not enough balance (you have ${currentUserDoc?.balance ?? 0}).`);
   }
 
   // Transaction: deduct stake AND write bet atomically.
   try {
+    // Editing an existing open bet → refund + remove it FIRST, but only NOW on
+    // Confirm (never on click). Single-stake balance move keeps it rules-safe.
+    if (editingBet) {
+      await runTransaction(db, async (tx) => {
+        const oldRef = doc(db, 'bets', editingBet.id);
+        const oldSnap = await tx.get(oldRef);
+        if (oldSnap.exists()) {
+          const ob = oldSnap.data();
+          if (ob.status !== 'open') throw new Error('Original bet already settled.');
+          const userRef = doc(db, 'users', currentUser.uid);
+          const uSnap = await tx.get(userRef);
+          tx.update(userRef, { balance: uSnap.data().balance + ob.stake });
+          tx.delete(oldRef);
+        }
+      });
+    }
     await runTransaction(db, async (tx) => {
       const userRef = doc(db, 'users', currentUser.uid);
       const uSnap = await tx.get(userRef);
@@ -606,8 +639,9 @@ async function placeBet() {
         placedAt: serverTimestamp(),
       });
     });
-    closeBetModal();
-    toast('Bet placed 🎟️');
+    const wasEdit = !!editingBet;
+    closeBetModal();  // clears editingBet
+    toast(wasEdit ? 'Bet updated 🎟️ · 已更新' : 'Bet placed 🎟️');
   } catch (err) {
     console.error(err);
     showBetErr(err.message);
@@ -708,31 +742,18 @@ function subscribeMyBets() {
   });
 }
 
-// Shared "modify a bet" flow: refund the open bet, then reopen the bet modal for
-// the same match so the user re-picks. Used by My Bets ✏️ AND the match-card chips.
-async function editBetById(betId, matchId) {
-  try {
-    await runTransaction(db, async (tx) => {
-      const betRef = doc(db, 'bets', betId);
-      const betSnap = await tx.get(betRef);
-      if (!betSnap.exists()) throw new Error('Bet missing.');
-      const bet = betSnap.data();
-      if (bet.status !== 'open') throw new Error('Bet already settled.');
-      const m = matchesCache.get(bet.matchId);
-      if (m && isPastKickoff(m)) throw new Error('Match already kicked off.');
-      const userRef = doc(db, 'users', currentUser.uid);
-      const uSnap = await tx.get(userRef);
-      if (!uSnap.exists()) throw new Error('User missing.');
-      tx.update(userRef, { balance: uSnap.data().balance + bet.stake });
-      tx.delete(betRef);
-    });
-    document.querySelector('.tab-btn[data-tab="matches"]')?.click();
-    setTimeout(() => openBetModal(matchId), 100);
-    toast('Stake refunded — place your new bet · 已退回,重新落注');
-  } catch (err) {
-    console.error(err);
-    toast(`Edit failed: ${err.message}`);
-  }
+// Shared "modify a bet" flow: open the existing OPEN bet PRE-FILLED in the bet
+// modal. Nothing is deleted on click — the old bet is only replaced when the user
+// confirms (see placeBet's editingBet path). Used by My Bets ✏️ AND card chips.
+function editBetById(betId, matchId) {
+  const bets = myBetsByMatch.get(matchId) || [];
+  const bet = bets.find(b => b.id === betId);
+  if (!bet) { toast('Bet not found.'); return; }
+  if (bet.status !== 'open') { toast('Settled bet — cannot edit.'); return; }
+  const m = matchesCache.get(matchId);
+  if (m && isPastKickoff(m)) { toast('Match already kicked off — cannot edit.'); return; }
+  document.querySelector('.tab-btn[data-tab="matches"]')?.click();
+  setTimeout(() => openBetModal(matchId, bet), 120);
 }
 
 function renderMyBets(bets) {
