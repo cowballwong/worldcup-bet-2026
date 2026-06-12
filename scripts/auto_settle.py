@@ -44,7 +44,8 @@ def _env(key: str) -> str | None:
 # ── team-name matching (our fixtures vs football-data) ──────────────────────
 ALIASES = {  # football-data name -> our fixtures name (only where they differ)
     "ivory coast": "cote d'ivoire",
-    "korea republic": "south korea",
+    "korea republic": "south korea", "korea south": "south korea",
+    "czech republic": "czechia",
     "turkiye": "turkiye", "turkey": "turkiye",
     "usa": "united states", "united states of america": "united states",
     "bosnia-herzegovina": "bosnia and herzegovina",
@@ -270,7 +271,15 @@ def main():
         return
 
     live = _fetch_live()  # API-Football live=all (quota-guarded; {} if over cap)
-    print(f"API-Football live: {len(live)} · {len(pending)} pending our side")
+    # football-data is the FINALS FALLBACK: slow (a finished match stays TIMED for
+    # hours) but eventually flips to FINISHED with team names that match ours — it
+    # catches any match the fast API-Football by-id path missed (e.g. live=all
+    # never matched it, so no fixture id was ever captured). Generous free quota.
+    try:
+        wc = _fetch_wc()
+    except Exception as e:  # noqa: BLE001
+        print(f"football-data fetch failed: {e}", file=sys.stderr); wc = {}
+    print(f"API-Football live: {len(live)} · football-data: {len(wc)} · {len(pending)} pending our side")
     settled_count = 0
     live_count = 0
     for mid, m in pending:
@@ -289,21 +298,36 @@ def main():
                     "updatedAt": firestore.SERVER_TIMESTAMP})
             live_count += 1
             continue
-        # Not live now → may be finished. Fetch the final by fixture id (free-OK).
+
+        # Not live now → may be finished. Try the FAST path first (API-Football
+        # by fixture id, if we captured one during the live phase), then fall back
+        # to football-data. Each yields final_score / half_score / api.
+        final_score = half_score = api = None
         fid = m.get("apiFixtureId")
-        fx = _af_fixture(fid) if fid else None
-        if not fx:
-            continue
-        if (((fx.get("fixture") or {}).get("status") or {}).get("short")) not in AF_FINISHED:
-            continue
-        g = fx.get("goals") or {}
-        if g.get("home") is None or g.get("away") is None:
-            continue
-        final_score = {"home": int(g["home"]), "away": int(g["away"])}
-        htsc = (fx.get("score") or {}).get("halftime") or {}
-        half_score = ({"home": int(htsc["home"]), "away": int(htsc["away"])}
-                      if htsc.get("home") is not None and htsc.get("away") is not None else None)
-        api = fx  # _pen_winner reads score.penalty
+        if fid:
+            fx = _af_fixture(fid)
+            if fx and (((fx.get("fixture") or {}).get("status") or {}).get("short")) in AF_FINISHED:
+                g = fx.get("goals") or {}
+                if g.get("home") is not None and g.get("away") is not None:
+                    final_score = {"home": int(g["home"]), "away": int(g["away"])}
+                    htsc = (fx.get("score") or {}).get("halftime") or {}
+                    half_score = ({"home": int(htsc["home"]), "away": int(htsc["away"])}
+                                  if htsc.get("home") is not None and htsc.get("away") is not None else None)
+                    api = fx  # _pen_winner reads score.penalty
+        if final_score is None:  # fallback: football-data FINISHED
+            fd = wc.get(key)
+            if fd and fd.get("status") == "FINISHED":
+                sc = fd.get("score") or {}
+                ft = sc.get("fullTime") or {}
+                if ft.get("home") is not None and ft.get("away") is not None:
+                    final_score = {"home": int(ft["home"]), "away": int(ft["away"])}
+                    htsc = sc.get("halfTime") or {}
+                    half_score = ({"home": int(htsc["home"]), "away": int(htsc["away"])}
+                                  if htsc.get("home") is not None and htsc.get("away") is not None else None)
+                    api = fd  # _pen_winner reads score.penalties
+        if final_score is None:
+            continue  # not finished on either source yet — settle on a later tick
+
         line = f"{home} {final_score['home']}-{final_score['away']} {away}"
         if DRY:
             print(f"WOULD settle: {mid}  {line}  (HT {half_score})")
