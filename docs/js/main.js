@@ -769,7 +769,16 @@ function renderMyBets(bets) {
     groups.get(b.matchId).push(b);
   }
   const koMs = id => { const m = matchesCache.get(id); return m ? new Date(m.kickoffISO).getTime() : Infinity; };
-  const orderedIds = [...groups.keys()].sort((a, b) => koMs(a) - koMs(b));
+  // Tier each match: 0 = live / in-play (awaiting result), 1 = upcoming (soonest
+  // first), 2 = finished (most recent first). So the bets that matter NOW float
+  // to the top and finished matches sink to the bottom.
+  const tierOf = id => {
+    const m = matchesCache.get(id);
+    if (!m) return 1;
+    if (m.status === 'settled') return 2;
+    if (m.status === 'live' || isPastKickoff(m)) return 0;  // playing / awaiting result
+    return 1;                                               // not kicked off yet
+  };
 
   const betRow = (b, m) => {
     const statusClass = b.status === 'won' ? 'is-won' : b.status === 'lost' ? 'is-lost' : '';
@@ -797,7 +806,7 @@ function renderMyBets(bets) {
       </div>`;
   };
 
-  root.innerHTML = orderedIds.map(mid => {
+  const groupHtml = mid => {
     const gbets = groups.get(mid);
     const m = matchesCache.get(mid);
     const matchLabel = m
@@ -809,6 +818,18 @@ function renderMyBets(bets) {
         <div class="bet-group-head"><span>${matchLabel}</span>${ko ? `<span class="bet-group-ko">${ko}</span>` : ''}</div>
         ${rows}
       </div>`;
+  };
+
+  const ids = [...groups.keys()];
+  const tiers = [
+    { key: 0, label: '🔴 進行中 · Live',        cmp: (a, b) => koMs(a) - koMs(b) },
+    { key: 1, label: '🟢 即將開波 · Upcoming',  cmp: (a, b) => koMs(a) - koMs(b) },
+    { key: 2, label: '✓ 已完場 · Finished',     cmp: (a, b) => koMs(b) - koMs(a) },
+  ];
+  root.innerHTML = tiers.map(t => {
+    const tids = ids.filter(id => tierOf(id) === t.key).sort(t.cmp);
+    if (!tids.length) return '';
+    return `<div class="bet-tier-label">${t.label}</div>` + tids.map(groupHtml).join('');
   }).join('');
 
   // Wire Edit/Delete buttons

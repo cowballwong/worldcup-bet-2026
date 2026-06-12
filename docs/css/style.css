@@ -441,7 +441,11 @@ img.emoji {
 .mbr-chip.mbr-edit:hover { background: #bfdbfe; }
 .mbr-chip.mbr-won  { background: #dcfce7; color: #166534; }
 .mbr-chip.mbr-lost { background: #fee2e2; color: #991b1b; }
-/* My Bets — grouped by match */
+/* My Bets — grouped by match, tiered Live / Upcoming / Finished */
+.bet-tier-label { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #64748b; margin: 0.9rem 0 0.5rem; padding-bottom: 0.2rem; }
+.bet-tier-label:first-child { margin-top: 0; }
+[data-theme="dark"] .bet-tier-label { color: #94a3b8; }
 .bet-group { margin-bottom: 0.85rem; }
 .bet-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
   font-size: 0.82rem; font-weight: 700; color: #0f172a; padding: 0.2rem 0.1rem 0.35rem; border-bottom: 1px solid #e2e8f0; margin-bottom: 0.4rem; }
