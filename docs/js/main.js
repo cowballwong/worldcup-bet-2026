@@ -406,6 +406,14 @@ function renderMatches(matches) {
       }
       openBetModal(card.dataset.matchId);
     });
+    // Tapping one of your own OPEN bet chips edits that bet (refund + re-pick),
+    // instead of opening a fresh bet for the match.
+    card.querySelectorAll('.mbr-chip.mbr-edit').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editBetById(chip.dataset.editBet, chip.dataset.editMatch);
+      });
+    });
   });
 }
 
@@ -419,7 +427,11 @@ function myBetRemark(matchId) {
     const res = b.status === 'won' ? `+${b.payout ?? Math.round(b.stake * b.odds)}`
               : b.status === 'lost' ? `-${b.stake}`
               : `${b.stake} pts`;
-    return `<span class="mbr-chip ${cls}">${b.selectionLabel || b.marketLabel} @ ${b.odds} · ${res}</span>`;
+    // Open bets are tappable → edit (refund + re-pick). Settled chips are static.
+    const edit = b.status === 'open'
+      ? ` mbr-edit" data-edit-bet="${b.id}" data-edit-match="${matchId}" title="撳一下改注 / tap to edit`
+      : '';
+    return `<span class="mbr-chip ${cls}${edit}">${b.selectionLabel || b.marketLabel} @ ${b.odds} · ${res}</span>`;
   }).join('');
   return `<div class="my-bet-remark">🎟️ 你已落注:${chips}</div>`;
 }
@@ -696,23 +708,53 @@ function subscribeMyBets() {
   });
 }
 
+// Shared "modify a bet" flow: refund the open bet, then reopen the bet modal for
+// the same match so the user re-picks. Used by My Bets ✏️ AND the match-card chips.
+async function editBetById(betId, matchId) {
+  try {
+    await runTransaction(db, async (tx) => {
+      const betRef = doc(db, 'bets', betId);
+      const betSnap = await tx.get(betRef);
+      if (!betSnap.exists()) throw new Error('Bet missing.');
+      const bet = betSnap.data();
+      if (bet.status !== 'open') throw new Error('Bet already settled.');
+      const m = matchesCache.get(bet.matchId);
+      if (m && isPastKickoff(m)) throw new Error('Match already kicked off.');
+      const userRef = doc(db, 'users', currentUser.uid);
+      const uSnap = await tx.get(userRef);
+      if (!uSnap.exists()) throw new Error('User missing.');
+      tx.update(userRef, { balance: uSnap.data().balance + bet.stake });
+      tx.delete(betRef);
+    });
+    document.querySelector('.tab-btn[data-tab="matches"]')?.click();
+    setTimeout(() => openBetModal(matchId), 100);
+    toast('Stake refunded — place your new bet · 已退回,重新落注');
+  } catch (err) {
+    console.error(err);
+    toast(`Edit failed: ${err.message}`);
+  }
+}
+
 function renderMyBets(bets) {
   const root = $('mybets-list');
   if (bets.length === 0) {
     root.innerHTML = '<p class="text-slate-500 text-sm">No bets yet. Pick a match to place your first.</p>';
     return;
   }
-  root.innerHTML = bets.map(b => {
+  // Group bets by match; order groups by kickoff (chronological).
+  const groups = new Map();
+  for (const b of bets) {
+    if (!groups.has(b.matchId)) groups.set(b.matchId, []);
+    groups.get(b.matchId).push(b);
+  }
+  const koMs = id => { const m = matchesCache.get(id); return m ? new Date(m.kickoffISO).getTime() : Infinity; };
+  const orderedIds = [...groups.keys()].sort((a, b) => koMs(a) - koMs(b));
+
+  const betRow = (b, m) => {
     const statusClass = b.status === 'won' ? 'is-won' : b.status === 'lost' ? 'is-lost' : '';
     const payout = b.status === 'won' ? `+${b.payout ?? Math.round(b.stake * b.odds)}` :
-                   b.status === 'lost' ? `-${b.stake}` :
-                   `${b.stake}`;
+                   b.status === 'lost' ? `-${b.stake}` : `${b.stake}`;
     const payoutCls = b.status === 'won' ? 'text-emerald-700' : b.status === 'lost' ? 'text-rose-600' : 'text-slate-500';
-    const m = matchesCache.get(b.matchId);
-    const matchLabel = m
-      ? `${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)}`
-      : b.matchLabel;
-    // Edit/Delete only available for open bets on matches that haven't kicked off yet.
     const canModify = b.status === 'open' && m && !isPastKickoff(m);
     const actions = canModify ? `
       <div class="bet-actions">
@@ -722,7 +764,6 @@ function renderMyBets(bets) {
     return `
       <div class="bet-history-row ${statusClass}">
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium">${matchLabel}</div>
           <div class="text-xs text-slate-500">${b.marketLabel} → ${b.selectionLabel} @ ${b.odds}</div>
         </div>
         <div class="text-right flex items-center gap-2">
@@ -732,8 +773,21 @@ function renderMyBets(bets) {
           </div>
           ${actions}
         </div>
-      </div>
-    `;
+      </div>`;
+  };
+
+  root.innerHTML = orderedIds.map(mid => {
+    const gbets = groups.get(mid);
+    const m = matchesCache.get(mid);
+    const matchLabel = m
+      ? `${m.homeFlag || ''} ${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)} ${m.awayFlag || ''}`
+      : (gbets[0].matchLabel || 'Match');
+    const ko = m ? formatKickoff(new Date(m.kickoffISO)) : '';
+    const rows = gbets.map(b => betRow(b, m)).join('');
+    return `<div class="bet-group">
+        <div class="bet-group-head"><span>${matchLabel}</span>${ko ? `<span class="bet-group-ko">${ko}</span>` : ''}</div>
+        ${rows}
+      </div>`;
   }).join('');
 
   // Wire Edit/Delete buttons
@@ -767,35 +821,9 @@ function renderMyBets(bets) {
   });
 
   root.querySelectorAll('.btn-edit').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const betId = btn.dataset.betId;
-      const matchId = btn.dataset.matchId;
-      // "Modify" = delete & refund the old bet, then open the bet modal for the same match
-      // so the user picks fresh market / selection / stake.
-      try {
-        await runTransaction(db, async (tx) => {
-          const betRef = doc(db, 'bets', betId);
-          const betSnap = await tx.get(betRef);
-          if (!betSnap.exists()) throw new Error('Bet missing.');
-          const bet = betSnap.data();
-          if (bet.status !== 'open') throw new Error('Bet already settled.');
-          const m = matchesCache.get(bet.matchId);
-          if (m && isPastKickoff(m)) throw new Error('Match already kicked off.');
-          const userRef = doc(db, 'users', currentUser.uid);
-          const uSnap = await tx.get(userRef);
-          if (!uSnap.exists()) throw new Error('User missing.');
-          tx.update(userRef, { balance: uSnap.data().balance + bet.stake });
-          tx.delete(betRef);
-        });
-        // Switch to Matches tab + open the bet modal for re-bet
-        document.querySelector('.tab-btn[data-tab="matches"]')?.click();
-        setTimeout(() => openBetModal(matchId), 100);
-        toast('Stake refunded — place your new bet');
-      } catch (err) {
-        console.error(err);
-        toast(`Edit failed: ${err.message}`);
-      }
+      editBetById(btn.dataset.betId, btn.dataset.matchId);
     });
   });
 }

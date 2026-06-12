@@ -436,8 +436,18 @@ img.emoji {
 .my-bet-remark { margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px dashed #e2e8f0; font-size: 0.72rem; color: #475569; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .mbr-chip { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; font-weight: 600; font-size: 0.7rem; }
 .mbr-chip.mbr-open { background: #dbeafe; color: #1e40af; }
+.mbr-chip.mbr-edit { cursor: pointer; }
+.mbr-chip.mbr-edit::after { content: " ✏️"; font-size: 0.62rem; opacity: 0.7; }
+.mbr-chip.mbr-edit:hover { background: #bfdbfe; }
 .mbr-chip.mbr-won  { background: #dcfce7; color: #166534; }
 .mbr-chip.mbr-lost { background: #fee2e2; color: #991b1b; }
+/* My Bets — grouped by match */
+.bet-group { margin-bottom: 0.85rem; }
+.bet-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
+  font-size: 0.82rem; font-weight: 700; color: #0f172a; padding: 0.2rem 0.1rem 0.35rem; border-bottom: 1px solid #e2e8f0; margin-bottom: 0.4rem; }
+.bet-group-ko { font-size: 0.68rem; font-weight: 500; color: #64748b; white-space: nowrap; }
+[data-theme="dark"] .bet-group-head { color: #e2e8f0; border-bottom-color: #334155; }
+[data-theme="dark"] .bet-group-ko { color: #94a3b8; }
 [data-theme="dark"] .my-bet-remark { color: #94a3b8; border-top-color: #334155; }
 [data-theme="dark"] .mbr-chip.mbr-open { background: #1e3a5f; color: #bfdbfe; }
 [data-theme="dark"] .mbr-chip.mbr-won  { background: #052e16; color: #bbf7d0; }
