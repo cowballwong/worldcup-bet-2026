@@ -300,6 +300,23 @@ function maybeScrollToNext(nextId, matches) {
   }, 400);
 }
 
+// Live minute display: API base minute + real minutes elapsed since capture.
+// Accepts a number (render time) or a string (ticker, from data-min). Caps so a
+// stuck/never-settled live match can't run away past extra time.
+function liveMinuteText(min, atMs) {
+  if (min === '' || min === null || min === undefined || Number.isNaN(Number(min))) return '●';
+  const extra = Math.max(0, Math.floor((Date.now() - (atMs || Date.now())) / 60000));
+  return '● ' + Math.min(Number(min) + extra, 130) + "'";
+}
+// One global ticker re-renders every live clock each 15s (minute granularity).
+if (!window.__wcLiveTicker) {
+  window.__wcLiveTicker = setInterval(() => {
+    document.querySelectorAll('#match-list .live-clock').forEach(el => {
+      el.textContent = liveMinuteText(el.dataset.min, Number(el.dataset.at));
+    });
+  }, 15000);
+}
+
 function renderMatches(matches) {
   // Player view only shows group-stage + scheduled knockout matches with kickoff
   // ahead. Knockout slot labels handled by formatTeam().
@@ -331,7 +348,10 @@ function renderMatches(matches) {
     if (m.finalScore) {
       scoreHtml = `<div class="vs"><span>${m.finalScore.home} - ${m.finalScore.away}</span><span class="vs-time">FT</span></div>`;
     } else if (m.status === 'live' && m.liveScore) {
-      scoreHtml = `<div class="vs live"><span>${m.liveScore.home} - ${m.liveScore.away}</span><span class="vs-time">● ${m.liveScore.minute || ''}'</span></div>`;
+      // Live clock ticks locally between the ~5-min API syncs: base minute from
+      // the API + real minutes elapsed since it was written (re-syncs each update).
+      const _at = m.updatedAt?.toMillis?.() || Date.now();
+      scoreHtml = `<div class="vs live"><span>${m.liveScore.home} - ${m.liveScore.away}</span><span class="vs-time live-clock" data-min="${m.liveScore.minute ?? ''}" data-at="${_at}">${liveMinuteText(m.liveScore.minute, _at)}</span></div>`;
     } else {
       scoreHtml = `<div class="vs text-slate-400"><span>vs</span><span class="vs-time">${ko.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>`;
     }
