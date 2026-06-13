@@ -588,6 +588,7 @@ def _lillyrose_autobet(db) -> int:
             continue
         o = m.get("odds") or {}
         picks = _lr_llm_picks(m["homeTeam"], m["awayTeam"], o) or {}
+        mbets = []  # picks placed on THIS match, for the Telegram notify
         for mk in todo:
             resolved = _lr_bet_for_market(mk, picks.get(mk), m, o)
             if not resolved and mk == "1x2":
@@ -618,6 +619,15 @@ def _lillyrose_autobet(db) -> int:
             bal -= LR_STAKE
             already.add((d.id, mk))
             placed += 1
+            mbets.append((mk, label, odds, why))
+        # Notify Anzon of LillyRose's picks for this match (one message per match).
+        if mbets:
+            emoji = {"1x2": "🏆", "score": "🎯", "ht1x2": "⏱", "ou25": "⚽", "btts": "🥅"}
+            lines = [f"🤖 LillyRose 落咗注 · {m['homeTeam']} vs {m['awayTeam']}"]
+            for mk, label, odds, why in mbets:
+                lines.append(f"{emoji.get(mk, '•')} {label} @ {odds}" + (f" — {why}" if why else ""))
+            lines.append(f"\n每注 {LR_STAKE} 分 · 餘額 {bal}")
+            _send_telegram("\n".join(lines))
     if placed:
         print(f"LillyRose auto-bet {placed} market(s)")
     return placed
