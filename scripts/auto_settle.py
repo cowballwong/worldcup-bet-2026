@@ -442,9 +442,121 @@ def _settle_champion(db, champion_team: str):
     print(f"champion settled: {champion_team} ({winners}/{total} correct)")
 
 
+SCORES = ['0-0', '1-0', '0-1', '1-1', '2-0', '0-2', '2-1', '1-2', '2-2',
+          '3-0', '0-3', '3-1', '1-3', '3-2', '2-3', '3-3']
+LR_STAKE = 15  # small stake per market
+
+# market labels — must match docs/js/markets.js
+_MKT_LABEL = {
+    "1x2": "Match result · 1X2", "score": "Exact score · 精確比數",
+    "ht1x2": "Halftime result · 半場勝和負", "ou25": "Over/Under 2.5 · 入球大細",
+    "btts": "Both teams to score · 兩隊入波",
+}
+
+
+def _ht_odds_from_ft(odds: dict) -> dict:
+    """Port of markets.js htOddsFromFT — derive HT 1X2 odds from FT 1X2."""
+    ftH = float(odds.get("home") or 2.5); ftA = float(odds.get("away") or 2.8)
+    pH, pA = 1 / ftH, 1 / ftA
+    ratio = pH / (pH + pA)
+    evenness = 1 - abs(ratio - 0.5) * 2
+    draw_p = 0.42 + 0.07 * evenness
+    lead_p = 1 - draw_p
+    h_share = 0.5 + (ratio - 0.5) * 0.7
+    margin = 1.10
+    to_odds = lambda p: max(1.05, round((1 / (p * margin)) * 100) / 100)
+    return {"home": to_odds(lead_p * h_share), "draw": to_odds(draw_p),
+            "away": to_odds(lead_p * (1 - h_share))}
+
+
+def _exact_score_odds(h: int, a: int) -> float:
+    """Port of markets.js exactScoreOdds."""
+    base = 6 + (h + a) * 2.5 + abs(h - a) * 1.2
+    common = {'1-1': 0.7, '2-1': 0.75, '1-2': 0.75, '1-0': 0.7, '0-1': 0.7,
+              '2-0': 0.8, '0-2': 0.8, '0-0': 0.85, '2-2': 0.95}
+    return round(base * common.get(f"{h}-{a}", 1.0) * 10) / 10
+
+
+def _lr_llm_picks(home: str, away: str, o: dict):
+    """gpt-5-mini picks ONE selection + short reason per market. None on failure."""
+    key = _env("OPENAI_API_KEY")
+    if not key:
+        return None
+    sys_p = ("You are LillyRose, a sharp, witty football pundit for a friends' World "
+             "Cup prediction game. Pick ONE selection for EACH of the 5 markets and give "
+             "a very short reason (<= 12 words; English or Cantonese fine). Use ONLY the "
+             "allowed selection codes. Respond with JSON only.")
+    user_p = json.dumps({
+        "match": f"{home} (home) vs {away} (away)",
+        "ft_1x2_odds": {"home": o.get("home"), "draw": o.get("draw"), "away": o.get("away")},
+        "ou25_odds": {"over": o.get("over25"), "under": o.get("under25")},
+        "btts_odds": {"yes": o.get("btts_yes"), "no": o.get("btts_no")},
+        "allowed": {"1x2": ["home", "draw", "away"], "ht1x2": ["home", "draw", "away"],
+                    "ou25": ["over", "under"], "btts": ["yes", "no"], "score": SCORES},
+        "respond_exactly": {"1x2": {"sel": "<code>", "why": "<reason>"},
+                            "ht1x2": {"sel": "", "why": ""}, "ou25": {"sel": "", "why": ""},
+                            "btts": {"sel": "", "why": ""}, "score": {"sel": "", "why": ""}},
+    }, ensure_ascii=False)
+    body = json.dumps({"model": "gpt-5-mini",
+                       "messages": [{"role": "system", "content": sys_p},
+                                    {"role": "user", "content": user_p}],
+                       "max_completion_tokens": 1600,
+                       "response_format": {"type": "json_object"}}).encode("utf-8")
+    try:
+        req = urllib.request.Request("https://api.openai.com/v1/chat/completions",
+                                     data=body, headers={"Authorization": f"Bearer {key}",
+                                                         "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            data = json.loads(r.read())
+        return json.loads(data["choices"][0]["message"]["content"])
+    except Exception as e:  # noqa: BLE001
+        print(f"LR LLM picks failed: {e}", file=sys.stderr)
+        return None
+
+
+def _lr_bet_for_market(market: str, pick: dict, m: dict, o: dict):
+    """Resolve a LillyRose pick into (selection, label, odds, why) or None."""
+    sel = (pick or {}).get("sel")
+    why = ((pick or {}).get("why") or "")[:120]
+    home, away = m.get("homeTeam"), m.get("awayTeam")
+    if market == "1x2":
+        if sel not in ("home", "draw", "away"):
+            return None
+        odds = o.get(sel)
+        label = "Draw" if sel == "draw" else f"{home if sel == 'home' else away} win"
+    elif market == "ht1x2":
+        if sel not in ("home", "draw", "away"):
+            return None
+        odds = _ht_odds_from_ft(o).get(sel)
+        label = "Level at HT" if sel == "draw" else f"{home if sel == 'home' else away} lead HT"
+    elif market == "ou25":
+        if sel not in ("over", "under"):
+            return None
+        odds = o.get("over25") if sel == "over" else o.get("under25")
+        label = "Over 2.5 goals" if sel == "over" else "Under 2.5 goals"
+    elif market == "btts":
+        if sel not in ("yes", "no"):
+            return None
+        odds = o.get("btts_yes") if sel == "yes" else o.get("btts_no")
+        label = "Yes — both score" if sel == "yes" else "No — at least one zero"
+    elif market == "score":
+        if sel not in SCORES:
+            return None
+        h, a = (int(x) for x in sel.split("-"))
+        odds = _exact_score_odds(h, a)
+        label = f"{home} {h} - {a} {away}"
+    else:
+        return None
+    if not isinstance(odds, (int, float)):
+        return None
+    return sel, label, round(float(odds), 2), why
+
+
 def _lillyrose_autobet(db) -> int:
-    """LillyRose AI: bet the 1X2 favourite on any match kicking off in the next
-    12h she hasn't bet yet. Idempotent (skips matches she's already on)."""
+    """LillyRose AI tipster: for each match kicking off in the next 12h, she picks
+    ONE selection per market (1X2 / exact score / HT / O/U 2.5 / BTTS) via gpt-5-mini
+    and places a small bet on each, with a short reason. Idempotent per (match, market).
+    Falls back to the 1X2 favourite if the LLM is unavailable."""
     import random
     from firebase_admin import firestore
     LR = "lillyrose-ai"
@@ -453,14 +565,14 @@ def _lillyrose_autobet(db) -> int:
     if not usnap.exists:
         return 0
     bal = usnap.to_dict().get("balance", 0)
-    already = {b.to_dict().get("matchId") for b in
-               db.collection("bets").where("userId", "==", LR).stream()}
+    already = {(b.to_dict().get("matchId"), b.to_dict().get("market"))
+               for b in db.collection("bets").where("userId", "==", LR).stream()}
     now = datetime.now(timezone.utc)
     horizon = now + timedelta(hours=12)
     placed = 0
     for d in db.collection("matches").stream():
         m = d.to_dict()
-        if d.id in already or m.get("status") == "settled":
+        if m.get("status") == "settled":
             continue
         if m.get("homeTeam") in (None, "", "TBD") or m.get("awayTeam") in (None, "", "TBD"):
             continue
@@ -470,33 +582,45 @@ def _lillyrose_autobet(db) -> int:
             continue
         if not (now < ko < horizon):
             continue
+        markets = ["1x2", "score", "ht1x2", "ou25", "btts"]
+        todo = [mk for mk in markets if (d.id, mk) not in already]
+        if not todo:
+            continue
         o = m.get("odds") or {}
-        cands = [("home", o.get("home"), m["homeTeam"]), ("draw", o.get("draw"), "Draw"),
-                 ("away", o.get("away"), m["awayTeam"])]
-        cands = [c for c in cands if isinstance(c[1], (int, float))]
-        if not cands:
-            continue
-        cands.sort(key=lambda c: c[1])
-        sel, odds, team = cands[0]
-        stake = 25 + random.randint(0, 75)
-        if bal < stake or DRY:
+        picks = _lr_llm_picks(m["homeTeam"], m["awayTeam"], o) or {}
+        for mk in todo:
+            resolved = _lr_bet_for_market(mk, picks.get(mk), m, o)
+            if not resolved and mk == "1x2":
+                # fallback: favourite by FT odds
+                cands = [("home", o.get("home")), ("draw", o.get("draw")), ("away", o.get("away"))]
+                cands = [c for c in cands if isinstance(c[1], (int, float))]
+                if cands:
+                    cands.sort(key=lambda c: c[1])
+                    s = cands[0][0]
+                    resolved = _lr_bet_for_market("1x2", {"sel": s, "why": "favourite by odds"}, m, o)
+            if not resolved:
+                continue
+            sel, label, odds, why = resolved
             if DRY:
-                print(f"WOULD LR-bet {d.id}: {sel} ({team}) @ {odds} stake {stake}")
-            continue
-        db.collection("bets").add({
-            "userId": LR, "userEmail": "lillyrose@ai.local", "userDisplayName": "LillyRose 🤖",
-            "matchId": d.id, "matchLabel": f"{m['homeTeam']} vs {m['awayTeam']}",
-            "market": "1x2", "marketLabel": "Match result · 1X2",
-            "selection": sel, "selectionLabel": ("Draw" if sel == "draw" else f"{team} win"),
-            "stake": stake, "odds": odds, "status": "open",
-            "placedAt": firestore.SERVER_TIMESTAMP, "isAI": True,
-        })
-        uref.update({"balance": firestore.Increment(-stake)})
-        bal -= stake
-        already.add(d.id)
-        placed += 1
+                print(f"WOULD LR-bet {d.id} [{mk}]: {sel} @ {odds} ({why})")
+                continue
+            if bal < LR_STAKE:
+                break
+            db.collection("bets").add({
+                "userId": LR, "userEmail": "lillyrose@ai.local", "userDisplayName": "LillyRose 🤖",
+                "matchId": d.id, "matchLabel": f"{m['homeTeam']} vs {m['awayTeam']}",
+                "market": mk, "marketLabel": _MKT_LABEL[mk],
+                "selection": sel, "selectionLabel": label,
+                "stake": LR_STAKE, "odds": odds, "status": "open",
+                "aiReason": why, "placedAt": firestore.SERVER_TIMESTAMP, "isAI": True,
+            })
+            uref.update({"balance": firestore.Increment(-LR_STAKE)})
+            bal -= LR_STAKE
+            already.add((d.id, mk))
+            placed += 1
     if placed:
-        print(f"LillyRose auto-bet {placed} match(es)")
+        print(f"LillyRose auto-bet {placed} market(s)")
+    return placed
     return placed
 
 
