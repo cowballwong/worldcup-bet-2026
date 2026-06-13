@@ -721,9 +721,9 @@ function renderLeaderboard(rows) {
           <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
           ${champHtml}
         </span>
-        <span class="text-right whitespace-nowrap">
-          <span class="font-semibold block">${r.asset} pts</span>
-          ${r.openStake ? `<span class="block text-xs text-slate-500">💵 ${r.balance} · 🎟️ ${r.openStake}</span>` : ''}
+        <span class="text-right whitespace-nowrap leading-tight">
+          <span class="font-semibold block">${r.asset}<span class="text-[11px] font-normal text-slate-400"> 實分</span></span>
+          <span class="block text-xs text-slate-500">${r.balance}<span class="text-[11px] text-slate-400"> 現金</span></span>
         </span>
       </div>
     `;

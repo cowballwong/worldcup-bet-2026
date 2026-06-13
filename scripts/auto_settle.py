@@ -15,12 +15,28 @@ Secrets (07_secrets/.env + service-account JSON):
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import sys
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+# Task Scheduler runs this via pythonw.exe, which has NO console → sys.stdout /
+# sys.stderr are None. The FIRST print() would then raise and kill the run
+# BEFORE any bet is placed (this silently broke LillyRose's auto-bet — fixed
+# 2026-06-13). Route output to a log file so the run never dies on a missing
+# console, and so we can debug headless runs.
+if sys.stdout is None or sys.stderr is None:
+    try:
+        _logf = open(Path(__file__).resolve().parent / "auto_settle.log",
+                     "a", encoding="utf-8")
+        sys.stdout = sys.stdout or _logf
+        sys.stderr = sys.stderr or _logf
+    except Exception:  # noqa: BLE001
+        sys.stdout = sys.stdout or io.StringIO()
+        sys.stderr = sys.stderr or io.StringIO()
 
 SECRETS = Path(r"G:/My Drive/AI_Development/07_secrets")
 ENV = SECRETS / ".env"
