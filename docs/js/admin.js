@@ -273,15 +273,25 @@ async function settleMatch(match) {
   if (updates.length) {
     const batch = writeBatch(db);
     const credits = new Map();
+    const released = new Map();  // stake leaving each user's locked openStake
+    const stakeByDoc = new Map(openBets.map(b => [b.docId, b.stake || 0]));
     for (const u of updates) {
       batch.update(doc(db, 'bets', u.docId), {
         status: u.status, payout: u.payout || 0, settledAt: serverTimestamp(),
       });
       finalByDoc.set(u.docId, { status: u.status, payout: u.payout || 0 });
       if (u.payout && u.payout > 0) credits.set(u.userId, (credits.get(u.userId) || 0) + u.payout);
+      // Bet leaves the 'open' pool → release its stake from the bettor's openStake.
+      const st = stakeByDoc.get(u.docId) || 0;
+      released.set(u.userId, (released.get(u.userId) || 0) + st);
     }
-    for (const [uid, cr] of credits.entries()) {
-      batch.update(doc(db, 'users', uid), { balance: increment(cr) });
+    for (const uid of new Set([...credits.keys(), ...released.keys()])) {
+      const cr = credits.get(uid) || 0;
+      const rel = released.get(uid) || 0;
+      const upd = {};
+      if (cr) upd.balance = increment(cr);
+      if (rel) upd.openStake = increment(-rel);
+      if (Object.keys(upd).length) batch.update(doc(db, 'users', uid), upd);
     }
     await batch.commit();
   }
@@ -470,8 +480,8 @@ $('lr-generate')?.addEventListener('click', async () => {
       });
       lines.push(`${m.homeTeam} vs ${m.awayTeam} — pick ${pick.code} (${pick.team}) @ ${pick.odds}, stake ${stake}`);
     }
-    // Decrement LillyRose's balance by total stake
-    batch.update(userRef, { balance: increment(-totalStake) });
+    // Move LillyRose's total stake from cash → locked openStake (asset unchanged).
+    batch.update(userRef, { balance: increment(-totalStake), openStake: increment(totalStake) });
     await batch.commit();
 
     setLR(`✅ Generated ${targets.length} bet${targets.length === 1 ? '' : 's'}, total stake ${totalStake} pts.`, false);

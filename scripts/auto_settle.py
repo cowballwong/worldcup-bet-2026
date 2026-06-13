@@ -347,6 +347,7 @@ def main():
         bets = list(db.collection("bets").where("matchId", "==", mid).stream())
         batch = db.batch()
         credits: dict[str, float] = {}
+        released: dict[str, float] = {}   # stake leaving each user's locked openStake
         predictions = []
         winners = 0
         for b in bets:
@@ -368,12 +369,23 @@ def main():
                                        "settledAt": firestore.SERVER_TIMESTAMP})
             if payout and payout > 0:
                 credits[bet["userId"]] = credits.get(bet["userId"], 0) + payout
+            # This bet leaves the 'open' pool → release its stake from the bettor's
+            # locked openStake (asset value = balance + openStake bookkeeping).
+            released[bet["userId"]] = released.get(bet["userId"], 0) + bet.get("stake", 0)
             if outcome == "won":
                 winners += 1
             if outcome in ("won", "lost"):
                 predictions.append(_pred({**bet, "status": outcome, "payout": payout}))
-        for uid, cr in credits.items():
-            batch.update(db.collection("users").document(uid), {"balance": firestore.Increment(cr)})
+        for uid in set(credits) | set(released):
+            upd = {}
+            cr = credits.get(uid, 0)
+            rel = released.get(uid, 0)
+            if cr:
+                upd["balance"] = firestore.Increment(cr)
+            if rel:
+                upd["openStake"] = firestore.Increment(-rel)
+            if upd:
+                batch.update(db.collection("users").document(uid), upd)
         batch.commit()
 
         # 3) public results reveal doc
@@ -615,7 +627,8 @@ def _lillyrose_autobet(db) -> int:
                 "stake": LR_STAKE, "odds": odds, "status": "open",
                 "aiReason": why, "placedAt": firestore.SERVER_TIMESTAMP, "isAI": True,
             })
-            uref.update({"balance": firestore.Increment(-LR_STAKE)})
+            uref.update({"balance": firestore.Increment(-LR_STAKE),
+                         "openStake": firestore.Increment(LR_STAKE)})
             bal -= LR_STAKE
             already.add((d.id, mk))
             placed += 1

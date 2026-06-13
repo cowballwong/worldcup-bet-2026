@@ -138,6 +138,7 @@ onAuthStateChanged(auth, async (user) => {
       displayName: user.displayName || user.email.split('@')[0],
       photoURL: user.photoURL || '',
       balance: APP_CONFIG.startingBalance,
+      openStake: 0,            // points locked in open (un-settled) bets; asset = balance + openStake
       joinedAt: serverTimestamp(),
     });
   }
@@ -609,7 +610,11 @@ async function placeBet() {
           if (ob.status !== 'open') throw new Error('Original bet already settled.');
           const userRef = doc(db, 'users', currentUser.uid);
           const uSnap = await tx.get(userRef);
-          tx.update(userRef, { balance: uSnap.data().balance + ob.stake });
+          // Refund stake to cash AND release it from locked openStake (asset unchanged).
+          tx.update(userRef, {
+            balance: uSnap.data().balance + ob.stake,
+            openStake: (uSnap.data().openStake || 0) - ob.stake,
+          });
           tx.delete(oldRef);
         }
       });
@@ -620,7 +625,11 @@ async function placeBet() {
       if (!uSnap.exists()) throw new Error('User doc missing.');
       const newBal = uSnap.data().balance - stake;
       if (newBal < 0) throw new Error('Insufficient balance.');
-      tx.update(userRef, { balance: newBal });
+      // Move stake from cash → locked openStake (asset value stays the same).
+      tx.update(userRef, {
+        balance: newBal,
+        openStake: (uSnap.data().openStake || 0) + stake,
+      });
 
       const betRef = doc(collection(db, 'bets'));
       tx.set(betRef, {
@@ -657,10 +666,15 @@ function showBetErr(msg) {
 // ── Leaderboard ────────────────────────────────────────────────
 function subscribeLeaderboard() {
   if (unsubLeaderboard) unsubLeaderboard();
-  const q = query(collection(db, 'users'), orderBy('balance', 'desc'));
+  // Rank by ASSET VALUE = balance (cash) + openStake (points locked in open bets),
+  // so heavy bettors aren't penalised for having stakes tied up. Firestore can't
+  // orderBy a computed sum, so we fetch all and sort client-side.
+  const q = query(collection(db, 'users'));
   unsubLeaderboard = onSnapshot(q, snap => {
     const rows = [];
     snap.forEach(d => rows.push({ uid: d.id, ...d.data() }));
+    rows.forEach(r => { r.asset = (r.balance || 0) + (r.openStake || 0); });
+    rows.sort((a, b) => b.asset - a.asset);
     leaderboardRows = rows;
     renderLeaderboard(rows);
   });
@@ -675,12 +689,14 @@ function renderLeaderboard(rows) {
   const medals = ['🥇', '🥈', '🥉'];
   // Competition (1224) ranking: tied players share the lowest rank, the
   // next non-tied player skips. So 1000 / 1000 / 950 / 900 → 1 / 1 / 3 / 4.
+  // Ranked by ASSET VALUE (cash + locked stake), computed in subscribeLeaderboard.
   let rank = 0;
-  let prevBalance = null;
+  let prevAsset = null;
   const ranked = rows.map((r, i) => {
-    if (r.balance !== prevBalance) rank = i + 1;
-    prevBalance = r.balance;
-    return { ...r, rank };
+    const asset = (r.balance || 0) + (r.openStake || 0);
+    if (asset !== prevAsset) rank = i + 1;
+    prevAsset = asset;
+    return { ...r, rank, asset };
   });
 
   const flags = teamFlagMap();
@@ -705,7 +721,10 @@ function renderLeaderboard(rows) {
           <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
           ${champHtml}
         </span>
-        <span class="font-semibold whitespace-nowrap">${r.balance} pts</span>
+        <span class="text-right whitespace-nowrap">
+          <span class="font-semibold block">${r.asset} pts</span>
+          ${r.openStake ? `<span class="block text-xs text-slate-500">💵 ${r.balance} · 🎟️ ${r.openStake}</span>` : ''}
+        </span>
       </div>
     `;
   }).join('');
@@ -851,7 +870,11 @@ function renderMyBets(bets) {
           const userRef = doc(db, 'users', currentUser.uid);
           const uSnap = await tx.get(userRef);
           if (!uSnap.exists()) throw new Error('User missing.');
-          tx.update(userRef, { balance: uSnap.data().balance + bet.stake });
+          // Refund stake to cash AND release it from locked openStake (asset unchanged).
+          tx.update(userRef, {
+            balance: uSnap.data().balance + bet.stake,
+            openStake: (uSnap.data().openStake || 0) - bet.stake,
+          });
           tx.delete(betRef);
         });
         toast(`Bet refunded · 退回 ${stake} pts`);

@@ -51,25 +51,26 @@ service cloud.firestore {
                         && request.resource.data.email == request.auth.token.email)
                     || isAdmin();
       // Admins can adjust anything (balance corrections, settlement credits).
-      // A player may update ONLY their own balance, and ONLY by a valid stake-sized
-      // amount (10-200) — DOWN to pay for a bet, or UP to refund one they delete /
-      // edit before kickoff (the My Bets ✏️/🗑️ buttons). They still cannot credit
-      // themselves winnings (settlement is admin-side) or change other fields.
+      // A player may update ONLY their own balance + openStake, and ONLY in a way
+      // that PRESERVES their asset value (balance + openStake). Placing a bet moves
+      // cash → openStake; cancelling/editing moves it back — the total never changes.
+      // This is a stronger guard than the old ±10-200 bound: a player can shuffle
+      // between cash and locked stake but can NEVER inflate their own total (winnings
+      // are credited admin-side at settlement, which raises openStake-released balance).
       // Self path is checked FIRST so a normal bet never depends on isAdmin()
       // (which needs the config doc). isAdmin() is the fallback.
-      // NOTE: rules can't see the matching bet write in the same transaction, so the
-      // ±10-200 bound is the guard. Friends game, no real money — acceptable, and
-      // symmetric to the existing stake-decrease allowance.
+      // NOTE: rules can't see the matching bet write in the same transaction; the
+      // asset-preservation invariant is the guard. Friends game, no real money.
+      // Old docs may lack openStake → treat missing as 0 (backfilled 2026-06-13).
       allow update: if (isSelf(uid)
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance'])
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'openStake'])
                         && request.resource.data.balance is number
                         && request.resource.data.balance >= 0
-                        && (
-                             ( (resource.data.balance - request.resource.data.balance) >= 10
-                               && (resource.data.balance - request.resource.data.balance) <= 200 )   // pay stake (down)
-                          || ( (request.resource.data.balance - resource.data.balance) >= 10
-                               && (request.resource.data.balance - resource.data.balance) <= 200 )   // refund bet (up)
-                        ))
+                        && request.resource.data.openStake is number
+                        && request.resource.data.openStake >= 0
+                        && (request.resource.data.balance + request.resource.data.openStake)
+                           == (resource.data.balance
+                               + (('openStake' in resource.data) ? resource.data.openStake : 0)))
                     || isAdmin();
       allow delete: if isAdmin();
     }
