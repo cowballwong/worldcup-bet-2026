@@ -380,9 +380,15 @@ def main():
                     "status": "live", "liveScore": lv,
                     "apiFixtureId": lv.get("fixture_id") or m.get("apiFixtureId"),
                     "updatedAt": firestore.SERVER_TIMESTAMP}
-                stats = _af_stats(lv.get("fixture_id"), home, away) if lv.get("fixture_id") else None
-                if stats:
-                    upd["liveStats"] = stats  # possession/shots/corners… for the live panel
+                # Detailed stats cost 1 extra API-Football call PER live match each
+                # scan. To halve quota use, fetch them at most every ~10 min (every
+                # other 5-min scan) — the score above still updates every scan.
+                now_ep = int(datetime.now(timezone.utc).timestamp())
+                if lv.get("fixture_id") and (now_ep - int(m.get("liveStatsTs") or 0) >= 540):
+                    stats = _af_stats(lv.get("fixture_id"), home, away)
+                    if stats:
+                        upd["liveStats"] = stats  # possession/shots/corners… for the live panel
+                        upd["liveStatsTs"] = now_ep
                 db.collection("matches").document(mid).update(upd)
             live_count += 1
             continue
