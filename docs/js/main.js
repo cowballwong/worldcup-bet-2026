@@ -348,13 +348,37 @@ function matchPredictions(matchId) {
         ${rows}
       </details>`;
   }).join('');
+  // ── Aggregate stats chart (always visible; per-player detail expands below) ──
+  const m = matchesCache.get(matchId) || {};
+  const totalBets = r.predictions.length;
+  const totalStake = r.predictions.reduce((s, p) => s + (p.stake || 0), 0);
+  const distBar = (market, opts) => {
+    const ps = r.predictions.filter(p => p.market === market);
+    if (!ps.length) return '';
+    const counts = {};
+    ps.forEach(p => { counts[p.selection] = (counts[p.selection] || 0) + 1; });
+    const segs = opts.map(o => ({ ...o, c: counts[o.code] || 0, pct: Math.round((counts[o.code] || 0) / ps.length * 100) })).filter(s => s.c > 0);
+    const bar = segs.map(s => `<span class="stat-seg" style="width:${s.pct}%;background:${s.color}"></span>`).join('');
+    const legend = segs.map(s => `<span class="stat-leg"><i style="background:${s.color}"></i>${s.label} ${s.c}</span>`).join(' ');
+    return `<div class="stat-row"><div class="stat-bar">${bar}</div><div class="stat-legend">${legend}</div></div>`;
+  };
+  const chart = `<div class="bet-stats">
+    <div class="text-xs text-slate-500 mb-1">📊 ${totalBets} 注 · 共 ${totalStake} 分落注</div>
+    ${distBar('1x2', [{ code: 'home', label: m.homeTeam || '主', color: '#10b981' }, { code: 'draw', label: '和', color: '#94a3b8' }, { code: 'away', label: m.awayTeam || '客', color: '#f59e0b' }])}
+    ${distBar('ou25', [{ code: 'over', label: '大', color: '#3b82f6' }, { code: 'under', label: '細', color: '#a855f7' }])}
+    ${distBar('btts', [{ code: 'yes', label: '互入', color: '#ec4899' }, { code: 'no', label: '冇互入', color: '#64748b' }])}
+  </div>`;
   const header = settled
-    ? `🏁 ${r.winners ?? '–'}/${r.total} 估中 · 結果(按玩家)`
-    : `🔓 已開波 · 大家估咗咩(${users.length} 人 · 撳開睇)`;
+    ? `🏁 ${r.winners ?? '–'}/${r.total} 估中 · 結果`
+    : `🔓 已開波 · 大家估咗咩`;
   return `
     <div class="preds">
       <div class="preds-h">${header}</div>
-      ${blocks}
+      ${chart}
+      <details class="preds-detail">
+        <summary>▸ 逐個玩家詳細 (${users.length} 人)</summary>
+        ${blocks}
+      </details>
     </div>`;
 }
 

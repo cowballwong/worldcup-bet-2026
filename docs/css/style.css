@@ -482,6 +482,17 @@ img.emoji {
 .pred-row.won .pred-res { color: #16a34a; }
 .pred-row.lost .pred-res { color: #dc2626; }
 .pred-row.open .pred-res { color: #64748b; }
+/* Per-match aggregate betting stats chart */
+.bet-stats { margin: 6px 0 4px; }
+.stat-row { margin: 5px 0; }
+.stat-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #f1f5f9; }
+.stat-seg { height: 100%; }
+.stat-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #475569; margin-top: 2px; }
+.stat-leg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+.preds-detail > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #475569; margin-top: 8px; list-style: none; }
+.preds-detail > summary::-webkit-details-marker { display: none; }
+[data-theme="dark"] .stat-bar { background: #334155; }
+[data-theme="dark"] .stat-legend { color: #cbd5e1; }
 [data-theme="dark"] .preds { border-top-color: #334155; }
 [data-theme="dark"] .preds-h { color: #94a3b8; }
 [data-theme="dark"] .pred-row .pred-pick { color: #94a3b8; }
