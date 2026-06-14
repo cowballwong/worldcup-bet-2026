@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.cowballwong.gubo",
+      "sha256_cert_fingerprints": [
+        "F3:BC:B1:B4:1A:1E:7B:62:61:75:BB:0C:5C:0D:C4:21:8A:8A:4F:D2:7B:21:36:2D:1D:D7:50:D4:88:10:56:AF"
+      ]
+    }
+  }
+]
