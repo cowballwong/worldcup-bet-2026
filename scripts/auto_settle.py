@@ -290,6 +290,112 @@ def _af_stats(fid, home_name, away_name) -> dict | None:
         return None
 
 
+# ── ESPN free hidden API (no key, NO quota) — PRIMARY live + finals source ──
+# site.api.espn.com serves the WC scoreboard (every match: score, status, goal/
+# card timeline) + a per-event summary (full team stats + halftime linescores).
+# Free and unmetered, so it replaces API-Football for the high-frequency live
+# polling that was burning the 100/day quota. API-Football + football-data stay
+# as fallbacks. (Unofficial endpoint — if ESPN ever changes it, the fallbacks
+# keep settlement working; only the live panel would degrade.)
+ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world"
+ESPN_STAT_MAP = {  # ESPN boxscore stat name → our short code
+    "possessionPct": "poss", "totalShots": "shots", "shotsOnTarget": "sot",
+    "wonCorners": "corners", "foulsCommitted": "fouls", "offsides": "offsides",
+    "yellowCards": "yellow", "redCards": "red",
+}
+
+
+def _espn_get(path):
+    try:
+        req = urllib.request.Request(f"{ESPN_BASE}/{path}",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+
+def _espn_scoreboard() -> dict:
+    """{norm 'home|away': {...}} for every WC match ESPN lists. Each value: home/
+    away (int goals), minute (str), live (bool=in-play), completed (bool),
+    event_id, hid/aid (team ids), events (goal/card timeline). {} on error."""
+    data = _espn_get("scoreboard")
+    if not data:
+        return {}
+    out = {}
+    for e in data.get("events", []) or []:
+        comp = (e.get("competitions") or [{}])[0]
+        st = (e.get("status") or {}).get("type") or {}
+        sides = {c.get("homeAway"): c for c in comp.get("competitors", []) or []}
+        hc, ac = sides.get("home"), sides.get("away")
+        if not hc or not ac:
+            continue
+        home = (hc.get("team") or {}).get("displayName", "")
+        away = (ac.get("team") or {}).get("displayName", "")
+        hid = str((hc.get("team") or {}).get("id") or "")
+        aid = str((ac.get("team") or {}).get("id") or "")
+        events = []
+        for d in comp.get("details", []) or []:
+            is_goal, is_red, is_yellow = bool(d.get("scoringPlay")), bool(d.get("redCard")), bool(d.get("yellowCard"))
+            if not (is_goal or is_red or is_yellow):
+                continue
+            nm = (d.get("athletesInvolved") or [""])[0]
+            events.append({
+                "min": (d.get("clock") or {}).get("displayValue", ""),
+                "icon": "⚽" if is_goal else ("🟥" if is_red else "🟨"),
+                "side": "home" if str((d.get("team") or {}).get("id")) == hid else "away",
+                "player": nm if isinstance(nm, str) else "",
+            })
+        try:
+            gh, ga = int(hc.get("score") or 0), int(ac.get("score") or 0)
+        except (TypeError, ValueError):
+            gh = ga = 0
+        out[f"{_norm(home)}|{_norm(away)}"] = {
+            "home": gh, "away": ga,
+            "minute": st.get("shortDetail") or st.get("detail") or "",
+            "live": st.get("state") == "in", "completed": bool(st.get("completed")),
+            "event_id": e.get("id"), "hid": hid, "aid": aid, "events": events,
+        }
+    return out
+
+
+def _espn_stats(event_id, hid, aid) -> dict | None:
+    """Possession/shots/etc for one ESPN event (free). {'home':…,'away':…} or None."""
+    if not event_id:
+        return None
+    data = _espn_get(f"summary?event={event_id}")
+    if not data:
+        return None
+    out = {"home": {}, "away": {}}
+    for t in (data.get("boxscore") or {}).get("teams", []) or []:
+        tid = str((t.get("team") or {}).get("id") or "")
+        side = ("home" if tid == str(hid) else "away" if tid == str(aid)
+                else t.get("homeAway") if t.get("homeAway") in ("home", "away") else None)
+        if side is None:
+            continue
+        for s in t.get("statistics", []) or []:
+            code = ESPN_STAT_MAP.get(s.get("name"))
+            if code and s.get("displayValue") is not None:
+                out[side][code] = f"{s['displayValue']}%" if code == "poss" else s["displayValue"]
+    return out if (out["home"] or out["away"]) else None
+
+
+def _espn_halftime(event_id) -> dict | None:
+    """Halftime score {home,away} from ESPN summary linescores (1st period), or None."""
+    if not event_id:
+        return None
+    data = _espn_get(f"summary?event={event_id}")
+    if not data:
+        return None
+    comp = ((data.get("header") or {}).get("competitions") or [{}])[0]
+    sides = {c.get("homeAway"): c for c in comp.get("competitors", []) or []}
+    try:
+        return {"home": int(sides["home"]["linescores"][0]["displayValue"]),
+                "away": int(sides["away"]["linescores"][0]["displayValue"])}
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+
+
 # ── settlement rules — must mirror docs/js/markets.js ───────────────────────
 def evaluate(market: str, selection: str, fs: dict, ht: dict | None):
     h, a = fs["home"], fs["away"]
@@ -385,7 +491,9 @@ def main():
     if revealed:
         print(f"kickoff-revealed predictions for {revealed} match(es)")
 
-    live = _fetch_live()  # API-Football live=all (quota-guarded; {} if over cap)
+    espn = _espn_scoreboard()                # FREE primary (no key/quota): live + finals
+    live = espn if espn else _fetch_live()   # API-Football live=all only if ESPN is down
+    espn_src = bool(espn)
     # football-data is the FINALS FALLBACK: slow (a finished match stays TIMED for
     # hours) but eventually flips to FINISHED with team names that match ours — it
     # catches any match the fast API-Football by-id path missed (e.g. live=all
@@ -394,29 +502,39 @@ def main():
         wc = _fetch_wc()
     except Exception as e:  # noqa: BLE001
         print(f"football-data fetch failed: {e}", file=sys.stderr); wc = {}
-    print(f"API-Football live: {len(live)} · football-data: {len(wc)} · {len(pending)} pending our side")
+    print(f"live source: {'ESPN' if espn_src else 'API-Football'} ({len(live)}) · football-data: {len(wc)} · {len(pending)} pending our side")
     settled_count = 0
     live_count = 0
     for mid, m in pending:
         home, away = m.get("homeTeam", ""), m.get("awayTeam", "")
         key = f"{_norm(home)}|{_norm(away)}"
         lv = live.get(key)
-        # LIVE now → push score + event timeline to the card; remember the API
-        # fixture id so we can fetch the FINAL by-id once it's over.
-        if lv:
+        # LIVE now → push score + event timeline to the card. (AF entries have no
+        # 'live' key → treat as in-play; ESPN entries carry live=True/False.)
+        if lv and lv.get("live", True):
             if DRY:
                 print(f"WOULD live-update {mid}: {home} {lv['home']}-{lv['away']} {away} ({lv['minute']})")
             else:
                 upd = {
-                    "status": "live", "liveScore": lv,
-                    "apiFixtureId": lv.get("fixture_id") or m.get("apiFixtureId"),
+                    "status": "live",
+                    "liveScore": {"home": lv["home"], "away": lv["away"],
+                                  "minute": lv["minute"], "events": lv.get("events", [])},
                     "updatedAt": firestore.SERVER_TIMESTAMP}
-                # Detailed stats cost 1 extra API-Football call PER live match each
-                # scan. To halve quota use, fetch them at most every ~10 min (every
-                # other 5-min scan) — the score above still updates every scan.
+                # remember the provider match id for the by-id finals fallback
+                if lv.get("fixture_id"):
+                    upd["apiFixtureId"] = lv["fixture_id"]
+                if lv.get("event_id"):
+                    upd["espnEventId"] = lv["event_id"]
+                # Detailed stats = 1 extra call PER live match. Throttle to ~10 min
+                # (every other 5-min scan); the score above still updates each scan.
                 now_ep = int(datetime.now(timezone.utc).timestamp())
-                if lv.get("fixture_id") and (now_ep - int(m.get("liveStatsTs") or 0) >= 540):
-                    stats = _af_stats(lv.get("fixture_id"), home, away)
+                if now_ep - int(m.get("liveStatsTs") or 0) >= 540:
+                    if espn_src and lv.get("event_id"):
+                        stats = _espn_stats(lv["event_id"], lv.get("hid"), lv.get("aid"))
+                    elif lv.get("fixture_id"):
+                        stats = _af_stats(lv["fixture_id"], home, away)
+                    else:
+                        stats = None
                     if stats:
                         upd["liveStats"] = stats  # possession/shots/corners… for the live panel
                         upd["liveStatsTs"] = now_ep
@@ -424,12 +542,15 @@ def main():
             live_count += 1
             continue
 
-        # Not live now → may be finished. Try the FAST path first (API-Football
-        # by fixture id, if we captured one during the live phase), then fall back
-        # to football-data. Each yields final_score / half_score / api.
+        # Not live now → may be finished. Sources in order: ESPN (free, completed
+        # flag + halftime linescores), then API-Football by-id, then football-data.
         final_score = half_score = api = None
+        if lv and lv.get("completed"):
+            final_score = {"home": lv["home"], "away": lv["away"]}
+            half_score = _espn_halftime(lv.get("event_id"))
+            api = None  # group stage has no shootout; knockout pens TODO via ESPN
         fid = m.get("apiFixtureId")
-        if fid:
+        if final_score is None and fid:
             fx = _af_fixture(fid)
             if fx and (((fx.get("fixture") or {}).get("status") or {}).get("short")) in AF_FINISHED:
                 g = fx.get("goals") or {}
@@ -540,7 +661,7 @@ def main():
 def _pen_winner(api: dict, home: str, away: str):
     """Penalty-shootout winner. API-Football carries score.penalty; football-data
     used score.penalties — accept either."""
-    sc = api.get("score") or {}
+    sc = (api or {}).get("score") or {}
     pens = sc.get("penalty") or sc.get("penalties") or {}
     if pens.get("home") is not None and pens.get("away") is not None:
         if pens["home"] > pens["away"]:
