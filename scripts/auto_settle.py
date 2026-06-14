@@ -221,6 +221,44 @@ def _af_fixture(fid) -> dict | None:
         return None
 
 
+_STAT_KEYS = {  # API-Football stat type → our short code
+    "Ball Possession": "poss", "Total Shots": "shots", "Shots on Goal": "sot",
+    "Corner Kicks": "corners", "Fouls": "fouls", "Offsides": "offsides",
+    "Yellow Cards": "yellow", "Red Cards": "red",
+}
+
+
+def _af_stats(fid, home_name, away_name) -> dict | None:
+    """Live match statistics (possession, shots, corners…) for ONE fixture id.
+    Returns {'home': {...}, 'away': {...}} or None. Quota-guarded (1 call)."""
+    key = _env("APISPORTS_KEY")
+    if not key or not fid or not _af_quota_ok_and_bump():
+        return None
+    try:
+        req = urllib.request.Request(
+            f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fid}",
+            headers={"x-apisports-key": key})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read())
+        resp = data.get("response") or []
+        if not resp:
+            return None
+        out = {"home": {}, "away": {}}
+        hn, an = _norm(home_name), _norm(away_name)
+        for entry in resp:
+            tn = _norm((entry.get("team") or {}).get("name", ""))
+            side = "home" if tn == hn else ("away" if tn == an else None)
+            if side is None:
+                continue
+            for s in (entry.get("statistics") or []):
+                code = _STAT_KEYS.get(s.get("type"))
+                if code and s.get("value") is not None:
+                    out[side][code] = s.get("value")
+        return out if (out["home"] or out["away"]) else None
+    except Exception:
+        return None
+
+
 # ── settlement rules — must mirror docs/js/markets.js ───────────────────────
 def evaluate(market: str, selection: str, fs: dict, ht: dict | None):
     h, a = fs["home"], fs["away"]
@@ -338,10 +376,14 @@ def main():
             if DRY:
                 print(f"WOULD live-update {mid}: {home} {lv['home']}-{lv['away']} {away} ({lv['minute']})")
             else:
-                db.collection("matches").document(mid).update({
+                upd = {
                     "status": "live", "liveScore": lv,
                     "apiFixtureId": lv.get("fixture_id") or m.get("apiFixtureId"),
-                    "updatedAt": firestore.SERVER_TIMESTAMP})
+                    "updatedAt": firestore.SERVER_TIMESTAMP}
+                stats = _af_stats(lv.get("fixture_id"), home, away) if lv.get("fixture_id") else None
+                if stats:
+                    upd["liveStats"] = stats  # possession/shots/corners… for the live panel
+                db.collection("matches").document(mid).update(upd)
             live_count += 1
             continue
 

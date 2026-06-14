@@ -563,3 +563,23 @@ img.emoji {
 .le-pl { overflow:hidden; text-overflow:ellipsis; }
 [data-theme="dark"] .live-events { border-top-color:#334155; }
 [data-theme="dark"] .le-min { color:#94a3b8; }
+
+/* Live match stats — possession bar + stat rows */
+.live-stats { margin:8px auto 0; max-width:320px; border-top:1px dashed #e2e8f0; padding-top:6px; }
+.live-stats summary { cursor:pointer; font-size:12px; font-weight:600; color:#475569; list-style:none; text-align:center; }
+.live-stats summary::-webkit-details-marker { display:none; }
+.lstat-poss-lbl { text-align:center; font-size:11px; color:#64748b; margin-top:6px; }
+.lstat-poss { display:flex; align-items:center; gap:6px; margin:2px 0 6px; }
+.lstat-pv { font-family:ui-monospace,monospace; font-size:12px; color:#334155; min-width:36px; text-align:center; }
+.lstat-bar { flex:1; display:flex; height:8px; border-radius:4px; overflow:hidden; background:#e2e8f0; }
+.lstat-bar span:first-child { background:#10b981; }
+.lstat-bar span:last-child { background:#f59e0b; }
+.lstat-row { display:grid; grid-template-columns:40px 1fr 40px; align-items:center; font-size:12px; padding:1px 0; }
+.lstat-h { text-align:left; font-variant-numeric:tabular-nums; color:#10b981; font-weight:600; }
+.lstat-a { text-align:right; font-variant-numeric:tabular-nums; color:#f59e0b; font-weight:600; }
+.lstat-mid { text-align:center; color:#64748b; font-size:11px; }
+[data-theme="dark"] .live-stats { border-top-color:#334155; }
+[data-theme="dark"] .live-stats summary { color:#cbd5e1; }
+[data-theme="dark"] .lstat-pv { color:#e2e8f0; }
+[data-theme="dark"] .lstat-bar { background:#334155; }
+[data-theme="dark"] .lstat-mid { color:#94a3b8; }

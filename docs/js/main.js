@@ -475,6 +475,7 @@ function renderMatches(matches) {
           </div>
         </div>
         ${liveCards(m)}
+        ${liveStats(m)}
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
         ${myBetRemark(m.id)}
         ${matchPredictions(m.id)}
@@ -541,6 +542,29 @@ function liveCards(m) {
     return `<div class="le-row"><span class="le-min">${e.min}</span><span class="le-ic">${e.icon}</span><span class="le-fl">${flag}</span><span class="le-pl">${nm}</span></div>`;
   }).join('');
   return `<div class="live-events">${rows}</div>`;
+}
+
+// Live match statistics — possession bar + shots/corners/cards etc.
+// m.liveStats {home:{...}, away:{...}} is written by auto_settle from API-Football fixtures/statistics.
+function liveStats(m) {
+  if (m.status !== 'live' || !m.liveStats) return '';
+  const h = m.liveStats.home || {}, a = m.liveStats.away || {};
+  const has = ['poss','shots','sot','corners','fouls','offsides','yellow','red'];
+  if (!has.some(k => h[k] != null || a[k] != null)) return '';
+  const num = v => { const n = parseInt(String(v).replace('%',''), 10); return isNaN(n) ? 0 : n; };
+  const ph = num(h.poss), pa = num(a.poss);
+  const poss = (h.poss != null || a.poss != null) ? `
+    <div class="lstat-poss-lbl">控球率 · Possession</div>
+    <div class="lstat-poss">
+      <span class="lstat-pv">${h.poss ?? '–'}</span>
+      <div class="lstat-bar"><span style="width:${ph}%"></span><span style="width:${pa}%"></span></div>
+      <span class="lstat-pv">${a.poss ?? '–'}</span>
+    </div>` : '';
+  const labels = { shots:'射門 Shots', sot:'射正 On target', corners:'角球 Corners', fouls:'犯規 Fouls', offsides:'越位 Offside', yellow:'🟨 黃 Yellow', red:'🟥 紅 Red' };
+  const rows = ['shots','sot','corners','fouls','offsides','yellow','red']
+    .filter(k => h[k] != null || a[k] != null)
+    .map(k => `<div class="lstat-row"><span class="lstat-h">${h[k] ?? 0}</span><span class="lstat-mid">${labels[k]}</span><span class="lstat-a">${a[k] ?? 0}</span></div>`).join('');
+  return `<details class="live-stats" open><summary>📊 Live 數據 · stats</summary>${poss}${rows}</details>`;
 }
 
 // Bilingual team label, with fallback to slot placeholder for knockout TBDs.
