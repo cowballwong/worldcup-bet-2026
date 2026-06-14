@@ -512,33 +512,39 @@ def main():
         # LIVE now → push score + event timeline to the card. (AF entries have no
         # 'live' key → treat as in-play; ESPN entries carry live=True/False.)
         if lv and lv.get("live", True):
+            new_ls = {"home": lv["home"], "away": lv["away"],
+                      "minute": lv["minute"], "events": lv.get("events", [])}
             if DRY:
                 print(f"WOULD live-update {mid}: {home} {lv['home']}-{lv['away']} {away} ({lv['minute']})")
             else:
-                upd = {
-                    "status": "live",
-                    "liveScore": {"home": lv["home"], "away": lv["away"],
-                                  "minute": lv["minute"], "events": lv.get("events", [])},
-                    "updatedAt": firestore.SERVER_TIMESTAMP}
-                # remember the provider match id for the by-id finals fallback
-                if lv.get("fixture_id"):
-                    upd["apiFixtureId"] = lv["fixture_id"]
-                if lv.get("event_id"):
-                    upd["espnEventId"] = lv["event_id"]
-                # Detailed stats = 1 extra call PER live match. Throttle to ~10 min
-                # (every other 5-min scan); the score above still updates each scan.
                 now_ep = int(datetime.now(timezone.utc).timestamp())
-                if now_ep - int(m.get("liveStatsTs") or 0) >= 540:
-                    if espn_src and lv.get("event_id"):
-                        stats = _espn_stats(lv["event_id"], lv.get("hid"), lv.get("aid"))
-                    elif lv.get("fixture_id"):
-                        stats = _af_stats(lv["fixture_id"], home, away)
-                    else:
-                        stats = None
-                    if stats:
-                        upd["liveStats"] = stats  # possession/shots/corners… for the live panel
-                        upd["liveStatsTs"] = now_ep
-                db.collection("matches").document(mid).update(upd)
+                stats_due = now_ep - int(m.get("liveStatsTs") or 0) >= 540
+                # Skip the Firestore WRITE entirely on a no-op tick (score, minute,
+                # events all identical + already 'live' + stats not due) — keeps the
+                # 5-min cron's write volume low so the free tier is plenty.
+                cur = m.get("liveScore") or {}
+                changed = (m.get("status") != "live"
+                           or cur.get("home") != new_ls["home"] or cur.get("away") != new_ls["away"]
+                           or cur.get("minute") != new_ls["minute"]
+                           or len(cur.get("events") or []) != len(new_ls["events"]))
+                if changed or stats_due:
+                    upd = {"status": "live", "liveScore": new_ls,
+                           "updatedAt": firestore.SERVER_TIMESTAMP}
+                    if lv.get("fixture_id"):
+                        upd["apiFixtureId"] = lv["fixture_id"]
+                    if lv.get("event_id"):
+                        upd["espnEventId"] = lv["event_id"]
+                    if stats_due:
+                        if espn_src and lv.get("event_id"):
+                            stats = _espn_stats(lv["event_id"], lv.get("hid"), lv.get("aid"))
+                        elif lv.get("fixture_id"):
+                            stats = _af_stats(lv["fixture_id"], home, away)
+                        else:
+                            stats = None
+                        if stats:
+                            upd["liveStats"] = stats  # possession/shots/corners… for the panel
+                            upd["liveStatsTs"] = now_ep
+                    db.collection("matches").document(mid).update(upd)
             live_count += 1
             continue
 
@@ -580,18 +586,20 @@ def main():
             settled_count += 1
             continue
 
-        # 1) write score + settled status
-        db.collection("matches").document(mid).update({
+        # Settle ATOMICALLY: match-doc status + every bet update + each user's
+        # balance/openStake change all go in ONE batch.commit(). Previously the
+        # match doc was flipped to 'settled' in a separate write BEFORE the bets
+        # batch — if that batch failed (e.g. a 429 throttle) the match showed
+        # 'settled' with no payouts. One batch = all-or-nothing.
+        bets = list(db.collection("bets").where("matchId", "==", mid).stream())
+        batch = db.batch()
+        batch.update(db.collection("matches").document(mid), {
             "finalScore": final_score,
             "halftimeScore": half_score,
             "status": "settled",
             "liveScore": None,
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
-
-        # 2) settle open bets + credit winners
-        bets = list(db.collection("bets").where("matchId", "==", mid).stream())
-        batch = db.batch()
         credits: dict[str, float] = {}
         released: dict[str, float] = {}   # stake leaving each user's locked openStake
         predictions = []
@@ -632,15 +640,14 @@ def main():
                 upd["openStake"] = firestore.Increment(-rel)
             if upd:
                 batch.update(db.collection("users").document(uid), upd)
-        batch.commit()
-
-        # 3) public results reveal doc
-        db.collection("results").document(mid).set({
+        # public results reveal doc — in the SAME batch (all-or-nothing)
+        batch.set(db.collection("results").document(mid), {
             "matchId": mid, "homeTeam": home, "awayTeam": away,
             "finalScore": final_score, "predictions": predictions,
             "winners": winners, "total": len(predictions),
             "settledAt": firestore.SERVER_TIMESTAMP,
         })
+        batch.commit()
 
         settled_count += 1
         _send_telegram(f"⚽️ 自動結算:{line}\n{winners}/{len(predictions)} 個估中 · 已派彩 + 出賽果")
