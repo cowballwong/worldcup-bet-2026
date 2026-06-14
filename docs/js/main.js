@@ -699,7 +699,9 @@ function updateSummary() {
 
 $('bet-confirm').addEventListener('click', placeBet);
 
+let _placing = false;  // re-entry guard: blocks double-tap / rapid Confirm → duplicate bets
 async function placeBet() {
+  if (_placing) return;
   $('bet-error').classList.add('hidden');
 
   if (!activeSelection) return showBetErr('Pick a selection first.');
@@ -709,12 +711,18 @@ async function placeBet() {
     return showBetErr(`Stake must be between ${APP_CONFIG.minStake} and ${APP_CONFIG.maxStake}.`);
   }
   if (isPastKickoff(activeMatch)) return showBetErr('Betting is closed for this match.');
+  // One bet per (match, market): block a duplicate unless we're editing that very bet.
+  const dup = (myBetsByMatch.get(activeMatch.id) || []).find(
+    b => b.market === activeMarket && b.status === 'open' && (!editingBet || b.id !== editingBet.id));
+  if (dup) return showBetErr('你已經喺呢場嘅呢個市場落咗注。想改注請去 My Bets 撳 ✏️。');
   const refund = editingBet ? editingBet.stake : 0;  // editing refunds the old stake first
   if (!currentUserDoc || (currentUserDoc.balance + refund) < stake) {
     return showBetErr(`Not enough balance (you have ${currentUserDoc?.balance ?? 0}).`);
   }
 
   // Transaction: deduct stake AND write bet atomically.
+  _placing = true;
+  const _cbtn = $('bet-confirm'); if (_cbtn) _cbtn.disabled = true;
   try {
     // Editing an existing open bet → refund + remove it FIRST, but only NOW on
     // Confirm (never on click). Single-stake balance move keeps it rules-safe.
@@ -771,6 +779,9 @@ async function placeBet() {
   } catch (err) {
     console.error(err);
     showBetErr(err.message);
+  } finally {
+    _placing = false;
+    if (_cbtn) _cbtn.disabled = false;
   }
 }
 
