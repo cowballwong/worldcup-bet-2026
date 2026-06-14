@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import re
 import sys
 import urllib.request
@@ -526,12 +527,49 @@ def _ht_odds_from_ft(odds: dict) -> dict:
             "away": to_odds(lead_p * (1 - h_share))}
 
 
-def _exact_score_odds(h: int, a: int) -> float:
-    """Port of markets.js exactScoreOdds."""
-    base = 6 + (h + a) * 2.5 + abs(h - a) * 1.2
-    common = {'1-1': 0.7, '2-1': 0.75, '1-2': 0.75, '1-0': 0.7, '0-1': 0.7,
-              '2-0': 0.8, '0-2': 0.8, '0-0': 0.85, '2-2': 0.95}
-    return round(base * common.get(f"{h}-{a}", 1.0) * 10) / 10
+def _poisson(k: int, lam: float) -> float:
+    fact = [1, 1, 2, 6, 24, 120, 720]
+    return math.exp(-lam) * (lam ** k) / (fact[k] if k < len(fact) else 5040)
+
+
+def _mu_from_over25(p_over: float) -> float:
+    pge3 = lambda m: 1 - math.exp(-m) * (1 + m + m * m / 2)
+    lo, hi = 0.3, 6.0
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if pge3(mid) < p_over:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def _match_lambdas(o: dict):
+    o = o or {}
+    mu = 2.7
+    try:
+        if o.get("over25") and o.get("under25"):
+            ro, ru = 1 / o["over25"], 1 / o["under25"]
+            mu = _mu_from_over25(ro / (ro + ru))
+    except (TypeError, ZeroDivisionError):
+        pass
+    ph, pa = 0.40, 0.33
+    try:
+        if o.get("home") and o.get("draw") and o.get("away"):
+            rh, rd, ra = 1 / o["home"], 1 / o["draw"], 1 / o["away"]
+            s = rh + rd + ra
+            ph, pa = rh / s, ra / s
+    except (TypeError, ZeroDivisionError):
+        pass
+    share = min(0.82, max(0.18, 0.5 + 0.6 * (ph - pa)))
+    return mu * share, mu * (1 - share)
+
+
+def _score_odds_poisson(o: dict, h: int, a: int) -> float:
+    """Poisson exact-score odds — mirrors markets.js scoreOdds()."""
+    lh, la = _match_lambdas(o)
+    p = _poisson(h, lh) * _poisson(a, la)
+    return max(1.2, min(200, round((1 / (p * 1.12)) * 10) / 10))
 
 
 def _lr_llm_picks(home: str, away: str, o: dict):
@@ -597,10 +635,11 @@ def _lr_bet_for_market(market: str, pick: dict, m: dict, o: dict):
         odds = o.get("btts_yes") if sel == "yes" else o.get("btts_no")
         label = "Yes — both score" if sel == "yes" else "No — at least one zero"
     elif market == "score":
-        if sel not in SCORES:
+        ms = re.match(r"^(\d+)-(\d+)$", str(sel))  # accept ANY scoreline (not just the grid)
+        if not ms:
             return None
-        h, a = (int(x) for x in sel.split("-"))
-        odds = _exact_score_odds(h, a)
+        h, a = int(ms.group(1)), int(ms.group(2))
+        odds = _score_odds_poisson(o, h, a)  # same Poisson model as the user-facing UI
         label = f"{home} {h} - {a} {away}"
     else:
         return None
