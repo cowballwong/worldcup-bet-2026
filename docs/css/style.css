@@ -481,6 +481,7 @@ img.emoji {
 .pred-row .pred-res { font-family: ui-monospace, monospace; font-weight: 700; flex-shrink: 0; }
 .pred-row.won .pred-res { color: #16a34a; }
 .pred-row.lost .pred-res { color: #dc2626; }
+.pred-row.open .pred-res { color: #64748b; }
 [data-theme="dark"] .preds { border-top-color: #334155; }
 [data-theme="dark"] .preds-h { color: #94a3b8; }
 [data-theme="dark"] .pred-row .pred-pick { color: #94a3b8; }

@@ -286,6 +286,33 @@ def main():
         print("no recently-kicked-off unsettled match — skip API call")
         return
 
+    # Reveal everyone's predictions the MOMENT a match has kicked off (betting is
+    # locked at kickoff, so it's safe + more fun to see all picks during the live
+    # match, not only at settlement). Written once per match — bets can't change
+    # post-kickoff. (Settlement later overwrites results/{mid} with win/loss.)
+    revealed = 0
+    for mid, m in pending:
+        if m.get("predictionsRevealed"):
+            continue
+        try:
+            bets = [b.to_dict() for b in db.collection("bets").where("matchId", "==", mid).stream()]
+            preds = [_pred(b) for b in bets if b]
+            if DRY:
+                print(f"WOULD reveal {mid}: {len(preds)} predictions (kickoff)")
+            else:
+                db.collection("results").document(mid).set({
+                    "matchId": mid, "homeTeam": m.get("homeTeam", ""), "awayTeam": m.get("awayTeam", ""),
+                    "finalScore": None, "predictions": preds, "winners": None,
+                    "total": len(preds), "live": True,
+                    "revealedAt": firestore.SERVER_TIMESTAMP,
+                })
+                db.collection("matches").document(mid).update({"predictionsRevealed": True})
+            revealed += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"reveal {mid} skipped: {e}", file=sys.stderr)
+    if revealed:
+        print(f"kickoff-revealed predictions for {revealed} match(es)")
+
     live = _fetch_live()  # API-Football live=all (quota-guarded; {} if over cap)
     # football-data is the FINALS FALLBACK: slow (a finished match stays TIMED for
     # hours) but eventually flips to FINISHED with team names that match ours — it

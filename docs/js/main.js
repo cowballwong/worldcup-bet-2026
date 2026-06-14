@@ -303,30 +303,38 @@ function subscribeResults() {
   }, () => {});
 }
 
-// Who predicted what on a finished match (revealed after settlement).
+// Who predicted what — revealed at KICKOFF (all picks, open) and updated with
+// win/loss at settlement. Each player is a click-to-expand row.
 function matchPredictions(matchId) {
   const r = resultsByMatch.get(matchId);
   if (!r || !Array.isArray(r.predictions) || r.predictions.length === 0) return '';
-  // Group every player's predictions for this match together, with their net.
+  const settled = r.predictions.some(p => p.status === 'won' || p.status === 'lost');
+  // Group every player's predictions together (+ net once settled, stake while live).
   const byUser = new Map();
   for (const p of r.predictions) {
     const key = p.userId || p.displayName;
-    if (!byUser.has(key)) byUser.set(key, { name: p.displayName, isAI: p.isAI, preds: [], net: 0 });
+    if (!byUser.has(key)) byUser.set(key, { name: p.displayName, isAI: p.isAI, preds: [], net: 0, staked: 0 });
     const u = byUser.get(key);
     u.preds.push(p);
-    u.net += (p.status === 'won') ? ((p.payout ?? Math.round(p.stake * p.odds)) - p.stake) : -p.stake;
+    u.staked += (p.stake || 0);
+    if (p.status === 'won') u.net += (p.payout ?? Math.round(p.stake * p.odds)) - p.stake;
+    else if (p.status === 'lost') u.net -= p.stake;
   }
-  const users = [...byUser.values()].sort((a, b) => b.net - a.net);  // best first
+  const users = [...byUser.values()].sort((a, b) =>
+    settled ? (b.net - a.net) : String(a.name).localeCompare(String(b.name)));
   const blocks = users.map(u => {
     const who = u.isAI ? `🤖 ${u.name}` : u.name;
-    const netCls = u.net > 0 ? 'text-emerald-700' : u.net < 0 ? 'text-rose-600' : 'text-slate-500';
-    const netTxt = `${u.net > 0 ? '+' : ''}${u.net}`;
+    const headRight = settled
+      ? `<span class="pred-user-net ${u.net > 0 ? 'text-emerald-700' : u.net < 0 ? 'text-rose-600' : 'text-slate-500'}">${u.net > 0 ? '+' : ''}${u.net} pts</span>`
+      : `<span class="pred-user-net text-slate-500">🎟️ ${u.staked}</span>`;
     const rows = u.preds.map(p => {
-      const won = p.status === 'won';
-      const res = won ? `+${p.payout ?? Math.round(p.stake * p.odds)}` : `-${p.stake}`;
+      const won = p.status === 'won', lost = p.status === 'lost';
+      const ic = won ? '✅' : lost ? '❌' : '⚪';
+      const cls = won ? 'won' : lost ? 'lost' : 'open';
+      const res = won ? `+${p.payout ?? Math.round(p.stake * p.odds)}` : lost ? `-${p.stake}` : `${p.stake}`;
       return `
-        <div class="pred-row ${won ? 'won' : 'lost'}">
-          <span class="pred-ic">${won ? '✅' : '❌'}</span>
+        <div class="pred-row ${cls}">
+          <span class="pred-ic">${ic}</span>
           <span class="pred-pick">${p.selectionLabel || p.marketLabel} @ ${p.odds}</span>
           <span class="pred-res">${res}</span>
         </div>`;
@@ -335,14 +343,17 @@ function matchPredictions(matchId) {
       <details class="pred-user">
         <summary class="pred-user-head">
           <span class="pred-who">${who}</span>
-          <span class="pred-user-net ${netCls}">${netTxt} pts</span>
+          ${headRight}
         </summary>
         ${rows}
       </details>`;
   }).join('');
+  const header = settled
+    ? `🏁 ${r.winners ?? '–'}/${r.total} 估中 · 結果(按玩家)`
+    : `🔓 已開波 · 大家估咗咩(${users.length} 人 · 撳開睇)`;
   return `
     <div class="preds">
-      <div class="preds-h">🏁 ${r.winners}/${r.total} 估中 · 結果(按玩家)</div>
+      <div class="preds-h">${header}</div>
       ${blocks}
     </div>`;
 }
@@ -442,7 +453,7 @@ function renderMatches(matches) {
         ${liveCards(m)}
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
         ${myBetRemark(m.id)}
-        ${m.status === 'settled' ? matchPredictions(m.id) : ''}
+        ${matchPredictions(m.id)}
       </div>
     `;
   }).join('');
