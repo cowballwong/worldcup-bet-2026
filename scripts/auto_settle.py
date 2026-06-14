@@ -114,37 +114,64 @@ def _fetch_wc() -> dict:
 # count calls in a state file and hard-stop near the cap (finals still settle via
 # football-data, which is unaffected).
 QUOTA_FILE = Path(__file__).resolve().parent.parent / "state" / "apisports_quota.json"
-AF_DAILY_CAP = 100  # API-Football free tier = 100 req/day; use full allowance (live stats adds ~1 call/scan)
+AF_DAILY_CAP = 100  # per KEY; total daily budget = 100 × number of API-Football keys
 AF_LIVE_SHORTS = {"1H", "2H", "ET", "BT", "P", "HT", "LIVE", "INT"}
 
 
-def _af_quota_ok_and_bump() -> bool:
-    """True if we may make one more API-Football call today; records the call."""
+def _af_keys() -> list:
+    """All configured API-Football keys, in priority order (primary first).
+    Add more by setting APISPORTS_KEY2 / APISPORTS_KEY3 / … in 07_secrets/.env —
+    each key carries its own 100/day free quota, so they're rotated to multiply it."""
+    out = []
+    for name in ("APISPORTS_KEY", "APISPORTS_KEY2", "APISPORTS_KEY3", "APISPORTS_KEY4"):
+        k = _env(name)
+        if k and k not in out:
+            out.append(k)
+    return out
+
+
+def _af_acquire_key() -> str | None:
+    """Pick an API-Football key still under its daily cap, record one call against
+    it, and return it. Keys are tried in priority order, so we drain the primary
+    before spilling onto spares. Returns None only when EVERY key is maxed today.
+    Per-key usage is keyed by the key's last 6 chars (we never store the full key)."""
+    keys = _af_keys()
+    if not keys:
+        return None
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    data = {"date": today, "count": 0}
+    data = {"date": today, "counts": {}}
     try:
         if QUOTA_FILE.exists():
             data = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
             if data.get("date") != today:
-                data = {"date": today, "count": 0}
+                data = {"date": today, "counts": {}}
     except (OSError, json.JSONDecodeError):
-        data = {"date": today, "count": 0}
-    if data.get("count", 0) >= AF_DAILY_CAP:
-        return False
-    data["count"] = data.get("count", 0) + 1
-    try:
-        QUOTA_FILE.parent.mkdir(parents=True, exist_ok=True)
-        QUOTA_FILE.write_text(json.dumps(data), encoding="utf-8")
-    except OSError:
-        pass
-    return True
+        data = {"date": today, "counts": {}}
+    counts = data.get("counts")
+    if not isinstance(counts, dict):
+        counts = {}
+        # migrate legacy {date,count} → charge today's prior usage to the primary key
+        if isinstance(data.get("count"), int) and data.get("date") == today:
+            counts[keys[0][-6:]] = data["count"]
+    for k in keys:
+        fp = k[-6:]
+        if counts.get(fp, 0) < AF_DAILY_CAP:
+            counts[fp] = counts.get(fp, 0) + 1
+            try:
+                QUOTA_FILE.parent.mkdir(parents=True, exist_ok=True)
+                QUOTA_FILE.write_text(json.dumps({"date": today, "counts": counts}),
+                                      encoding="utf-8")
+            except OSError:
+                pass
+            return k
+    return None
 
 
 def _fetch_live() -> dict:
     """Return {normalized 'home|away': {home,away,minute}} for live WC matches.
     Empty dict if over the daily quota or on any error (non-fatal)."""
-    key = _env("APISPORTS_KEY")
-    if not key or not _af_quota_ok_and_bump():
+    key = _af_acquire_key()
+    if not key:
         return {}
     try:
         req = urllib.request.Request("https://v3.football.api-sports.io/fixtures?live=all",
@@ -207,8 +234,10 @@ AF_FINISHED = {"FT", "AET", "PEN"}
 def _af_fixture(fid) -> dict | None:
     """Query ONE API-Football fixture by id (works on the free plan, unlike the
     season/date queries). Returns the raw fixture dict or None. Quota-guarded."""
-    key = _env("APISPORTS_KEY")
-    if not key or not fid or not _af_quota_ok_and_bump():
+    if not fid:
+        return None
+    key = _af_acquire_key()
+    if not key:
         return None
     try:
         req = urllib.request.Request(f"https://v3.football.api-sports.io/fixtures?id={fid}",
@@ -231,8 +260,10 @@ _STAT_KEYS = {  # API-Football stat type → our short code
 def _af_stats(fid, home_name, away_name) -> dict | None:
     """Live match statistics (possession, shots, corners…) for ONE fixture id.
     Returns {'home': {...}, 'away': {...}} or None. Quota-guarded (1 call)."""
-    key = _env("APISPORTS_KEY")
-    if not key or not fid or not _af_quota_ok_and_bump():
+    if not fid:
+        return None
+    key = _af_acquire_key()
+    if not key:
         return None
     try:
         req = urllib.request.Request(
