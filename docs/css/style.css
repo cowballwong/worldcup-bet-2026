@@ -495,6 +495,13 @@ img.emoji {
 /* Idle (never-bet) players sink to the bottom of the leaderboard, muted */
 .leaderboard-row.is-idle { opacity: .55; }
 .leaderboard-row.is-idle .rank-medal { color: #94a3b8; font-size: 14px; }
+/* Group standings: A–L switcher (one group shown at a time) */
+.group-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; position: sticky; top: 0; background: #f8fafc; padding: 4px 0; z-index: 2; }
+.group-switch .grp-btn { min-width: 34px; padding: 5px 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font-weight: 600; font-size: 13px; color: #475569; cursor: pointer; }
+.group-switch .grp-btn.active { background: #047857; border-color: #047857; color: #fff; }
+[data-theme="dark"] .group-switch { background: #0f172a; }
+[data-theme="dark"] .group-switch .grp-btn { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+[data-theme="dark"] .group-switch .grp-btn.active { background: #059669; border-color: #059669; color: #fff; }
 
 /* Sticky tab bar under the sticky header */
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }

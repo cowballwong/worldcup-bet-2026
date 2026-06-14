@@ -1049,7 +1049,8 @@ function renderStandings() {
   }
 
   const groupLetters = Object.keys(groups).sort();
-  const html = groupLetters.map(letter => {
+  const groupHtmlMap = {};
+  groupLetters.forEach(letter => {
     const { matches, teams } = groups[letter];
     // Init each team's row
     const rows = new Map();
@@ -1087,9 +1088,9 @@ function renderStandings() {
         <td class="px-1 py-1 text-center font-semibold">${r.Pts}</td>
       </tr>
     `).join('');
-    return `
+    groupHtmlMap[letter] = `
       <div class="standings-group">
-        <h3 class="font-semibold mt-4 mb-2">Group ${letter}</h3>
+        <h3 class="font-semibold mt-1 mb-2">Group ${letter}</h3>
         <div class="overflow-x-auto">
         <table class="standings-table text-sm">
           <colgroup>
@@ -1123,8 +1124,17 @@ function renderStandings() {
         </div>
       </div>
     `;
-  }).join('');
-  root.innerHTML = html;
+  });
+
+  // Group is too long shown all at once → a switcher; show one group at a time.
+  let sel = window.__wcStandingsGroup;
+  if (!sel || !groupLetters.includes(sel)) sel = groupLetters[0];
+  window.__wcStandingsGroup = sel;
+  const tabs = groupLetters.map(l =>
+    `<button class="grp-btn${l === sel ? ' active' : ''}" data-grp="${l}">${l}</button>`).join('');
+  root.innerHTML = `<div class="group-switch">${tabs}</div>` + (groupHtmlMap[sel] || '');
+  root.querySelectorAll('.grp-btn').forEach(b =>
+    b.addEventListener('click', () => { window.__wcStandingsGroup = b.dataset.grp; renderStandings(); }));
 }
 
 // Hook bracket + standings into the matches subscription so they
