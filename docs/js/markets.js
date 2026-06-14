@@ -48,18 +48,25 @@ export const MARKETS = {
       const SCORES = [
         '0-0','1-0','0-1','1-1','2-0','0-2','2-1','1-2','2-2','3-0','0-3','3-1','1-3','3-2','2-3','3-3'
       ];
+      // Poisson model: λ per team derived from THIS match's 1X2 + O/U odds, so
+      // odds track how lopsided / high-scoring the match is (real bookmaker method).
+      const { lh, la } = matchLambdas(match.odds);
+      let gridP = 0;
       const grid = SCORES.map(code => {
         const [h, a] = code.split('-').map(Number);
-        const odds = exactScoreOdds(h, a);
+        const p = poisson(h, lh) * poisson(a, la);
+        gridP += p;
         const enRow = `${match.homeFlag} ${h} - ${a} ${match.awayFlag}`;
         const zhHome = TEAM_ZH[match.homeTeam] || match.homeTeam;
         const zhAway = TEAM_ZH[match.awayTeam] || match.awayTeam;
         const zhRow = `${zhHome} ${h} - ${a} ${zhAway}`;
-        return { code, label: bi(enRow, zhRow), odds };
+        return { code, label: bi(enRow, zhRow), odds: scoreOddsFromProb(p) };
       });
-      // Catch-all for any scoreline beyond the 0-3 × 0-3 grid (e.g. a 4+ goal haul
-      // like Germany 4-1). Wins if either side scores 4 or more.
-      grid.push({ code: 'other', label: bi('🎯 Any other score (a team scores 4+)', '🎯 其他比數 (有一隊入 4 球或以上)'), odds: 4.5 });
+      // Catch-all for any scoreline beyond the 0-3 × 0-3 grid (e.g. Germany 4-1).
+      // Its probability = 1 − Σ(grid), so its odds also track the match (a lopsided
+      // high-scoring game → 4+ likely → lower odds; a tight game → higher odds).
+      const pOther = Math.max(0.004, 1 - gridP);
+      grid.push({ code: 'other', label: bi('🎯 Any other score (a team scores 4+)', '🎯 其他比數 (有一隊入 4 球或以上)'), odds: scoreOddsFromProb(pOther) });
       return grid;
     },
     evaluate(bet, match) {
@@ -160,17 +167,42 @@ function htOddsFromFT(odds) {
 }
 
 
-// Simple exact-score odds derived from a Poisson-ish heuristic.
-// Not real bookmaker odds — good enough for a friends game.
-function exactScoreOdds(h, a) {
-  // Base: more common scores have lower odds. Penalise large goal counts.
-  const total = h + a;
-  const balance = Math.abs(h - a);
-  const base = 6 + total * 2.5 + balance * 1.2;
-  // Common scores get a discount:
-  const common = { '1-1': 0.7, '2-1': 0.75, '1-2': 0.75, '1-0': 0.7, '0-1': 0.7, '2-0': 0.8, '0-2': 0.8, '0-0': 0.85, '2-2': 0.95 };
-  const k = common[`${h}-${a}`] ?? 1.0;
-  return Math.round(base * k * 10) / 10;
+// ── Poisson correct-score model ────────────────────────────────
+// Real bookmakers price correct-score by Poisson: derive each team's expected
+// goals (λ) then P(h-a) = Poisson(h,λh)·Poisson(a,λa). We back λ out of the
+// match's OWN 1X2 + Over/Under-2.5 odds so every match is priced individually,
+// and "other" = 1 − Σ(grid) is priced consistently with the grid.
+function poisson(k, lambda) {
+  const fact = [1, 1, 2, 6, 24, 120, 720];
+  return Math.exp(-lambda) * Math.pow(lambda, k) / (fact[k] ?? 5040);
+}
+function devig(...rs) { const s = rs.reduce((x, y) => x + y, 0) || 1; return rs.map(r => r / s); }
+function muFromOver25(pOver) {
+  // Solve μ so that P(total ≥ 3) = pOver, total ~ Poisson(μ). Bisection.
+  const pge3 = m => 1 - Math.exp(-m) * (1 + m + m * m / 2);
+  let lo = 0.3, hi = 6;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (pge3(mid) < pOver) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
+function matchLambdas(o) {
+  o = o || {};
+  let mu = 2.7;                                   // default total expected goals
+  if (o.over25 && o.under25) {
+    const [pov] = devig(1 / o.over25, 1 / o.under25);
+    mu = muFromOver25(pov);
+  }
+  let ph = 0.40, pa = 0.33;                        // default home/away tilt
+  if (o.home && o.draw && o.away) {
+    const [h, , a] = devig(1 / o.home, 1 / o.draw, 1 / o.away);
+    ph = h; pa = a;
+  }
+  let share = 0.5 + 0.6 * (ph - pa);              // home's share of the goals
+  share = Math.min(0.82, Math.max(0.18, share));
+  return { lh: mu * share, la: mu * (1 - share) };
+}
+const SCORE_MARGIN = 1.12;                         // house overround on correct-score
+function scoreOddsFromProb(p) {
+  return Math.max(1.2, Math.min(200, Math.round((1 / (p * SCORE_MARGIN)) * 10) / 10));
 }
 
 

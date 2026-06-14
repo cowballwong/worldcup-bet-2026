@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, APP_CONFIG } from "./firebase-config.js";
-import { MARKETS, getMarketLabel, getSelectionLabel } from "./markets.js?v=20260614c";
+import { MARKETS, getMarketLabel, getSelectionLabel } from "./markets.js?v=20260614d";
 import { teamLabel, TEAM_ZH } from "./teams-zh.js";
 import { championOddsFor, championPayout, CHAMPION_BASE } from "./champion-odds.js";
 
