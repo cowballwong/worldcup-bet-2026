@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, APP_CONFIG } from "./firebase-config.js";
-import { MARKETS, getMarketLabel, getSelectionLabel } from "./markets.js?v=20260614d";
+import { MARKETS, getMarketLabel, getSelectionLabel, scoreOdds } from "./markets.js?v=20260614e";
 import { teamLabel, TEAM_ZH } from "./teams-zh.js";
 import { championOddsFor, championPayout, CHAMPION_BASE } from "./champion-odds.js";
 
@@ -612,10 +612,57 @@ $('bet-market').addEventListener('change', e => {
   updateSummary();
 });
 
+function renderScorePicker(root) {
+  // Exact score: user dials any scoreline; odds priced live by the Poisson model.
+  let h = 1, a = 1;
+  if (editingBet && editingBet.market === 'score' && /^\d+-\d+$/.test(editingBet.selection || '')) {
+    [h, a] = editingBet.selection.split('-').map(Number);
+  }
+  const homeLbl = `${activeMatch.homeFlag || ''} ${teamLabel(activeMatch.homeTeam)}`;
+  const awayLbl = `${teamLabel(activeMatch.awayTeam)} ${activeMatch.awayFlag || ''}`;
+  root.innerHTML = `
+    <div class="score-picker">
+      <div class="score-team">
+        <div class="score-team-name">${homeLbl}</div>
+        <div class="stepper">
+          <button type="button" class="step" data-side="h" data-d="-1">−</button>
+          <span class="score-val" id="score-h">${h}</span>
+          <button type="button" class="step" data-side="h" data-d="1">+</button>
+        </div>
+      </div>
+      <div class="score-colon">:</div>
+      <div class="score-team">
+        <div class="score-team-name">${awayLbl}</div>
+        <div class="stepper">
+          <button type="button" class="step" data-side="a" data-d="-1">−</button>
+          <span class="score-val" id="score-a">${a}</span>
+          <button type="button" class="step" data-side="a" data-d="1">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="score-odds-line">賠率 Odds：<span class="odds-pill" id="score-odds">—</span></div>`;
+  const apply = () => {
+    document.getElementById('score-h').textContent = h;
+    document.getElementById('score-a').textContent = a;
+    activeSelection = `${h}-${a}`;
+    activeOdds = scoreOdds(activeMatch, h, a);
+    document.getElementById('score-odds').textContent = activeOdds;
+    updateSummary();
+  };
+  root.querySelectorAll('.step').forEach(btn => btn.addEventListener('click', () => {
+    const d = parseInt(btn.dataset.d, 10);
+    if (btn.dataset.side === 'h') h = Math.max(0, Math.min(15, h + d));
+    else a = Math.max(0, Math.min(15, a + d));
+    apply();
+  }));
+  apply();  // set initial selection + odds so Confirm works without extra clicks
+}
+
 function renderSelections() {
   const root = $('bet-selections');
   const market = MARKETS[activeMarket];
   if (!market) { root.innerHTML = ''; return; }
+  if (activeMarket === 'score') { renderScorePicker(root); return; }
   const sels = market.selections(activeMatch);
   root.innerHTML = sels.map(s => `
     <div class="bet-selection-row" data-code="${s.code}" data-odds="${s.odds}">

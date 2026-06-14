@@ -205,12 +205,27 @@ function scoreOddsFromProb(p) {
   return Math.max(1.2, Math.min(200, Math.round((1 / (p * SCORE_MARGIN)) * 10) / 10));
 }
 
+// Poisson odds for ANY user-entered exact score (h home goals, a away goals).
+export function scoreOdds(match, h, a) {
+  const { lh, la } = matchLambdas((match || {}).odds);
+  return scoreOddsFromProb(poisson(h, lh) * poisson(a, la));
+}
+
 
 export function getMarketLabel(code) {
   return MARKETS[code]?.label ?? code;
 }
 
 export function getSelectionLabel(marketCode, selectionCode, match) {
+  // Exact score is user-entered (any scoreline), so label it directly rather than
+  // looking it up in a fixed grid.
+  if (marketCode === 'score') {
+    if (selectionCode === 'other') return bi('Any other score (4+)', '其他比數 (4 球以上)');
+    const [h, a] = String(selectionCode).split('-');
+    const zhH = TEAM_ZH[match?.homeTeam] || match?.homeTeam || '主隊';
+    const zhA = TEAM_ZH[match?.awayTeam] || match?.awayTeam || '客隊';
+    return bi(`${match?.homeFlag || ''} ${h} - ${a} ${match?.awayFlag || ''}`, `${zhH} ${h} - ${a} ${zhA}`);
+  }
   const market = MARKETS[marketCode];
   if (!market) return selectionCode;
   const sel = market.selections(match).find(s => s.code === selectionCode);

@@ -508,6 +508,19 @@ img.emoji {
 [data-theme="dark"] .group-switch { background: #0f172a; }
 [data-theme="dark"] .group-switch .grp-btn { background: #1e293b; border-color: #334155; color: #cbd5e1; }
 [data-theme="dark"] .group-switch .grp-btn.active { background: #059669; border-color: #059669; color: #fff; }
+/* Exact-score picker: dial any scoreline, odds priced live */
+.score-picker { display: flex; align-items: flex-end; justify-content: center; gap: 14px; padding: 12px 0 4px; }
+.score-team { text-align: center; }
+.score-team-name { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px; max-width: 120px; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper .step { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer; color: #334155; }
+.stepper .step:active { background: #ecfdf5; }
+.score-val { min-width: 30px; text-align: center; font-size: 28px; font-weight: 800; color: #0f172a; }
+.score-colon { font-size: 26px; font-weight: 800; padding-bottom: 8px; color: #94a3b8; }
+.score-odds-line { text-align: center; margin-top: 8px; font-size: 13px; color: #475569; }
+[data-theme="dark"] .stepper .step { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .score-val { color: #f1f5f9; }
+[data-theme="dark"] .score-team-name { color: #cbd5e1; }
 
 /* Sticky tab bar under the sticky header */
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }
