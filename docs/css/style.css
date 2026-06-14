@@ -521,6 +521,11 @@ img.emoji {
 [data-theme="dark"] .stepper .step { background: #1e293b; border-color: #334155; color: #e2e8f0; }
 [data-theme="dark"] .score-val { color: #f1f5f9; }
 [data-theme="dark"] .score-team-name { color: #cbd5e1; }
+/* Admin: kick / remove player */
+.kick-btn { flex-shrink: 0; padding: 4px 9px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.kick-btn:hover { background: #fee2e2; }
+.kick-btn:disabled { opacity: .6; cursor: default; }
+[data-theme="dark"] .kick-btn { background: #3f1d1d; border-color: #7f1d1d; color: #fca5a5; }
 
 /* Sticky tab bar under the sticky header */
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }

@@ -347,10 +347,31 @@ async function loadUsers() {
     }
     root.innerHTML = rows.map(r => `
       <div class="leaderboard-row">
-        <span class="flex-1 truncate">${r.displayName} <span class="text-xs text-slate-400">${r.email}</span></span>
-        <span class="font-semibold">${r.balance} pts</span>
+        <span class="flex-1 truncate">${r.displayName} <span class="text-xs text-slate-400">${r.email || ''}</span></span>
+        <span class="font-semibold mr-2 whitespace-nowrap">${r.balance} pts</span>
+        <button class="kick-btn" data-uid="${r.uid}" data-name="${(r.displayName || '').replace(/"/g, '&quot;')}" title="Kick / remove this player">🚪 踢走</button>
       </div>
     `).join('');
+    root.querySelectorAll('.kick-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.dataset.uid;
+        const name = btn.dataset.name || 'this player';
+        if (!confirm(`踢走「${name}」?\n\nThis permanently deletes their account, ALL their bets, and their champion pick. Cannot be undone.`)) return;
+        btn.disabled = true; btn.textContent = '踢緊…';
+        try {
+          const batch = writeBatch(db);
+          const bets = await getDocs(query(collection(db, 'bets'), where('userId', '==', uid)));
+          bets.forEach(d => batch.delete(d.ref));
+          batch.delete(doc(db, 'champions', uid));  // no-op if absent
+          batch.delete(doc(db, 'users', uid));
+          await batch.commit();
+          // row disappears on the next users snapshot
+        } catch (e) {
+          alert('Kick failed: ' + e.message);
+          btn.disabled = false; btn.textContent = '🚪 踢走';
+        }
+      });
+    });
   });
 }
 
