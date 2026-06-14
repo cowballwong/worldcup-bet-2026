@@ -48,7 +48,7 @@ export const MARKETS = {
       const SCORES = [
         '0-0','1-0','0-1','1-1','2-0','0-2','2-1','1-2','2-2','3-0','0-3','3-1','1-3','3-2','2-3','3-3'
       ];
-      return SCORES.map(code => {
+      const grid = SCORES.map(code => {
         const [h, a] = code.split('-').map(Number);
         const odds = exactScoreOdds(h, a);
         const enRow = `${match.homeFlag} ${h} - ${a} ${match.awayFlag}`;
@@ -57,10 +57,15 @@ export const MARKETS = {
         const zhRow = `${zhHome} ${h} - ${a} ${zhAway}`;
         return { code, label: bi(enRow, zhRow), odds };
       });
+      // Catch-all for any scoreline beyond the 0-3 × 0-3 grid (e.g. a 4+ goal haul
+      // like Germany 4-1). Wins if either side scores 4 or more.
+      grid.push({ code: 'other', label: bi('🎯 Any other score (a team scores 4+)', '🎯 其他比數 (有一隊入 4 球或以上)'), odds: 4.5 });
+      return grid;
     },
     evaluate(bet, match) {
       const fs = match.finalScore;
       if (!fs) return null;
+      if (bet.selection === 'other') return (fs.home > 3 || fs.away > 3) ? 'won' : 'lost';
       const [h, a] = bet.selection.split('-').map(Number);
       return (h === fs.home && a === fs.away) ? 'won' : 'lost';
     }

@@ -228,6 +228,8 @@ def evaluate(market: str, selection: str, fs: dict, ht: dict | None):
         if h < a: return "won" if selection == "away" else "lost"
         return "won" if selection == "draw" else "lost"
     if market == "score":
+        if selection == "other":  # any scoreline beyond the 0-3 × 0-3 grid
+            return "won" if (h > 3 or a > 3) else "lost"
         try:
             sh, sa = (int(x) for x in selection.split("-"))
         except ValueError:

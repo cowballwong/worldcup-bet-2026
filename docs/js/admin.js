@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, ODDS_API_KEY } from "./firebase-config.js";
-import { settleBetsForMatch, MARKETS } from "./markets.js";
+import { settleBetsForMatch, MARKETS } from "./markets.js?v=20260614c";
 import { TEAM_ZH } from "./teams-zh.js";
 import { fetchAndPair } from "./odds-refresh.js";
 import { DEFAULT_CHAMPION_ODDS, CHAMPION_BASE, championPayout } from "./champion-odds.js";
