@@ -72,6 +72,7 @@ onAuthStateChanged(auth, async user => {
   subscribeAdminMatches();
   loadUsers();
   initChampionAdmin();
+  renderStatus();
 });
 
 // ── Tabs ───────────────────────────────────────────────────────
@@ -87,8 +88,60 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     $(`tab-${tab}`).classList.remove('hidden');
+    if (tab === 'status') renderStatus();
   });
 });
+
+// ── Status / health (landing) — monitor automation, act by exception ──
+async function renderStatus() {
+  const root = $('status-content');
+  if (!root) return;
+  root.innerHTML = '<p class="text-slate-500 text-sm">Loading…</p>';
+  try {
+    const now = Date.now();
+    const [mSnap, uSnap, bSnap] = await Promise.all([
+      getDocs(collection(db, 'matches')),
+      getDocs(collection(db, 'users')),
+      getDocs(collection(db, 'bets')),
+    ]);
+    const matches = []; mSnap.forEach(d => matches.push({ id: d.id, ...d.data() }));
+    const players = uSnap.size;
+    let totalBets = 0; const lrMatchIds = new Set();
+    bSnap.forEach(d => { totalBets++; const b = d.data() || {}; if (b.userId === 'lillyrose-ai') lrMatchIds.add(b.matchId); });
+    const koMs = m => { const t = Date.parse(m.kickoffISO || ''); return isNaN(t) ? null : t; };
+    const tbd = t => !t || t === 'TBD';
+    const stuck = matches.filter(m => m.status !== 'settled' && koMs(m) && now > koMs(m) + 2.5 * 3600e3 && !tbd(m.homeTeam));
+    const live = matches.filter(m => m.status === 'live');
+    const incomplete = matches.filter(m => m.status !== 'settled' && (tbd(m.homeTeam) || tbd(m.awayTeam) || !koMs(m) || !(m.odds && m.odds.home)));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const today = matches.filter(m => (m.kickoffISO || '').slice(0, 10) === todayStr);
+    const upcomingNoLR = matches.filter(m => m.status !== 'settled' && koMs(m) && koMs(m) > now && koMs(m) < now + 12 * 3600e3 && !tbd(m.homeTeam) && !lrMatchIds.has(m.id));
+
+    const stat = (n, label, cls) => `<div class="stat-cell"><div class="stat-num ${cls || ''}">${n}</div><div class="stat-lbl">${label}</div></div>`;
+    const row = (m, note) => `<div class="match-card status-fix" data-mid="${m.id}"><div class="font-medium text-sm">${m.homeFlag || ''} ${m.homeTeam || 'TBD'} vs ${m.awayTeam || 'TBD'} ${m.awayFlag || ''}</div><div class="text-xs text-slate-500">${m.id} · ${m.kickoffISO ? new Date(m.kickoffISO).toLocaleString() : '冇開波時間'} · ${note}</div></div>`;
+    const block = (title, arr, note, cls) => arr.length
+      ? `<div class="status-block"><div class="status-h ${cls}">${title} (${arr.length})</div>${arr.map(m => row(m, note)).join('')}</div>` : '';
+
+    let html = `<div class="status-grid">
+      ${stat(players, '玩家')}${stat(totalBets, '注')}
+      ${stat(live.length, '進行中', live.length ? 'text-rose-600' : '')}${stat(today.length, '今日場')}
+    </div>`;
+    html += block('⚠️ 可能卡住(開波 2.5 鐘+ 仲未結算)— 撳入去手動 settle', stuck, '撳開 → 入 HT+FT 比分 → Save & Settle', 'text-rose-700');
+    html += block('🟡 資料未齊(冇隊 / 冇開波時間 / 冇賠率)', incomplete, '撳開填返', 'text-amber-700');
+    html += block('🤖 LillyRose 12 鐘內開波但未落注', upcomingNoLR, 'cron 應該會落;唔放心可去 LillyRose 控制頁手動', 'text-slate-600');
+    if (!stuck.length && !incomplete.length) {
+      html += '<div class="status-ok">✅ 一切正常 — 冇場卡住、資料齊全,自動化行緊。</div>';
+    }
+    root.innerHTML = html;
+    root.querySelectorAll('.status-fix').forEach(el => el.addEventListener('click', () => {
+      const m = matches.find(x => x.id === el.dataset.mid);
+      if (m) openMatchModal(m.id, m);
+    }));
+  } catch (e) {
+    root.innerHTML = `<p class="text-rose-600 text-sm">Status load failed: ${e.message}</p>`;
+  }
+}
+$('status-refresh')?.addEventListener('click', renderStatus);
 
 // ── Match list ─────────────────────────────────────────────────
 function subscribeAdminMatches() {

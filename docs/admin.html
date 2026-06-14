@@ -6,7 +6,7 @@
 <title>Admin · World Cup 2026 Bet</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js" crossorigin="anonymous"></script>
-<link rel="stylesheet" href="css/style.css?v=20260614e">
+<link rel="stylesheet" href="css/style.css?v=20260614f">
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
 
@@ -35,33 +35,35 @@
 
 <main id="admin-view" class="max-w-5xl mx-auto px-4 py-6 hidden">
 
-  <!-- Quick actions — the manual things Anzon does most, one tap from landing -->
-  <div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-    <div class="text-xs font-semibold text-amber-800 mb-2">⚡ Quick actions · 快速手動</div>
-    <div class="flex flex-wrap gap-2">
-      <button onclick="qa('fixtures')" class="qa-btn bg-emerald-600 hover:bg-emerald-700 text-white">⚽️ Fixtures (settle match)</button>
-      <button onclick="qa('champion')" class="qa-btn bg-amber-600 hover:bg-amber-700 text-white">👑 Settle champion</button>
-      <button onclick="qaRun('lillyrose','lr-generate')" class="qa-btn bg-rose-600 hover:bg-rose-700 text-white">🤖 Generate LillyRose picks</button>
-      <button onclick="qaRun('odds','odds-preview')" class="qa-btn bg-sky-600 hover:bg-sky-700 text-white">📈 Refresh odds</button>
-      <button onclick="qa('users')" class="qa-btn bg-slate-600 hover:bg-slate-700 text-white">👥 Users</button>
-    </div>
-  </div>
-  <script>
-    function qa(tab){ var b=document.querySelector('.tab-btn[data-tab="'+tab+'"]'); if(b) b.click(); window.scrollTo({top:0,behavior:'smooth'}); }
-    function qaRun(tab, btnId){ qa(tab); setTimeout(function(){ var x=document.getElementById(btnId); if(x) x.click(); }, 150); }
-  </script>
   <style>.qa-btn{font-size:13px;padding:7px 12px;border-radius:8px;font-weight:600;}</style>
 
   <div class="flex border-b border-slate-200 mb-4 overflow-x-auto">
-    <button class="tab-btn px-3 py-2 font-medium text-rose-700 border-b-2 border-rose-700 whitespace-nowrap" data-tab="fixtures">⚽️ Fixtures</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="users">👥 Users</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="champion">👑 Champion</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="lillyrose">🤖 LillyRose</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="odds">📈 Refresh odds</button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="bulk-import">📥 Import</button>
+    <button class="tab-btn px-3 py-2 font-medium text-rose-700 border-b-2 border-rose-700 whitespace-nowrap" data-tab="status">📊 狀態</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="fixtures">⚽️ 賽程 &amp; 賠率</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="champion">👑 冠軍</button>
+    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap" data-tab="users">👥 玩家</button>
   </div>
 
-  <section id="tab-fixtures" class="tab-panel">
+  <!-- STATUS — the landing: monitor automation, act by exception -->
+  <section id="tab-status" class="tab-panel">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-semibold">狀態台 · Status</h2>
+      <button id="status-refresh" class="qa-btn bg-slate-600 hover:bg-slate-700 text-white">🔄 Refresh</button>
+    </div>
+    <div id="status-content" class="space-y-3"><p class="text-slate-500 text-sm">Loading…</p></div>
+
+    <details class="mt-5 border border-slate-200 rounded-lg p-3">
+      <summary class="font-semibold text-sm cursor-pointer">🤖 LillyRose 控制(進階)</summary>
+      <p class="text-xs text-slate-500 my-2">LillyRose 已經每 5 分鐘自動落注(後台 cron)。呢度只係手動後備。</p>
+      <button class="tab-btn qa-btn bg-rose-600 hover:bg-rose-700 text-white" data-tab="lillyrose">開 LillyRose 控制頁 →</button>
+    </details>
+  </section>
+
+  <section id="tab-fixtures" class="tab-panel hidden">
+    <div class="flex flex-wrap gap-2 mb-3">
+      <button class="tab-btn qa-btn bg-sky-600 hover:bg-sky-700 text-white" data-tab="odds">📈 Refresh odds</button>
+      <button class="tab-btn qa-btn bg-slate-600 hover:bg-slate-700 text-white" data-tab="bulk-import">📥 Bulk import</button>
+    </div>
     <div class="flex justify-between items-center mb-3">
       <h2 class="font-semibold">All matches · 賽程</h2>
       <button id="add-match-btn" class="text-sm bg-emerald-600 text-white px-3 py-1 rounded">+ Add match</button>
@@ -109,6 +111,7 @@
   </section>
 
   <section id="tab-lillyrose" class="tab-panel hidden">
+    <button class="tab-btn text-sm text-slate-500 mb-2" data-tab="status">← 返狀態</button>
     <h2 class="font-semibold mb-2">LillyRose AI player · LillyRose AI 玩家</h2>
     <p class="text-sm text-slate-600 mb-3">An AI player visible to everyone. Strategy: for each upcoming match in the next N hours that LillyRose hasn't bet on yet, place one bet on the 1X2 favourite with a random stake (25–100 pts).</p>
     <div class="flex flex-wrap gap-2 items-center mb-3">
@@ -135,6 +138,7 @@
   </section>
 
   <section id="tab-odds" class="tab-panel hidden">
+    <button class="tab-btn text-sm text-slate-500 mb-2" data-tab="fixtures">← 返賽程</button>
     <h2 class="font-semibold mb-2">Refresh odds from The Odds API · 由 The Odds API 拉最新賠率</h2>
     <p class="text-sm text-slate-600 mb-2">Free tier: 500 requests/month. One refresh = 1 request. Pulls all available WC2026 matches, takes the median odds across UK + EU bookmakers, matches them to your fixtures by team name + kickoff time, and shows a preview. You confirm before write.</p>
     <p class="text-xs text-slate-500 mb-3">Need a key? Sign up at <a class="underline text-rose-700" href="https://the-odds-api.com" target="_blank">the-odds-api.com</a> (no credit card), then paste it into <code>docs/js/firebase-config.js</code>'s <code>ODDS_API_KEY</code>.</p>
@@ -147,6 +151,7 @@
   </section>
 
   <section id="tab-bulk-import" class="tab-panel hidden">
+    <button class="tab-btn text-sm text-slate-500 mb-2" data-tab="fixtures">← 返賽程</button>
     <h2 class="font-semibold mb-3">Bulk import fixtures · 一次過導入賽程</h2>
     <p class="text-sm text-slate-600 mb-3">Paste the contents of <code>public/data/fixtures.json</code> (or any valid match list) below and click Import. Existing match IDs will be overwritten.</p>
     <textarea id="bulk-import-json" class="w-full h-64 border border-slate-300 rounded p-3 font-mono text-xs"></textarea>
@@ -230,6 +235,6 @@
 
 <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm shadow-lg hidden z-30"></div>
 
-<script type="module" src="js/admin.js?v=20260614e"></script>
+<script type="module" src="js/admin.js?v=20260614f"></script>
 </body>
 </html>

@@ -526,6 +526,18 @@ img.emoji {
 .kick-btn:hover { background: #fee2e2; }
 .kick-btn:disabled { opacity: .6; cursor: default; }
 [data-theme="dark"] .kick-btn { background: #3f1d1d; border-color: #7f1d1d; color: #fca5a5; }
+/* Admin status / health landing */
+.status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stat-cell { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 6px; text-align: center; }
+.stat-num { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+.stat-lbl { font-size: 11px; color: #64748b; margin-top: 2px; }
+.status-block { margin-top: 14px; }
+.status-h { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.status-block .status-fix { cursor: pointer; margin-bottom: 6px; }
+.status-ok { margin-top: 14px; padding: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; color: #065f46; font-size: 14px; text-align: center; }
+[data-theme="dark"] .stat-cell { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .stat-num { color: #f1f5f9; }
+[data-theme="dark"] .status-ok { background: #052e2b; border-color: #134e4a; color: #6ee7b7; }
 
 /* Sticky tab bar under the sticky header */
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }
