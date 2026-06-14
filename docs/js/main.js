@@ -363,20 +363,20 @@ function matchPredictions(matchId) {
     return `<div class="stat-row"><div class="stat-bar">${bar}</div><div class="stat-legend">${legend}</div></div>`;
   };
   const chart = `<div class="bet-stats">
-    <div class="text-xs text-slate-500 mb-1">📊 ${totalBets} 注 · 共 ${totalStake} 分落注</div>
-    ${distBar('1x2', [{ code: 'home', label: m.homeTeam || '主', color: '#10b981' }, { code: 'draw', label: '和', color: '#94a3b8' }, { code: 'away', label: m.awayTeam || '客', color: '#f59e0b' }])}
-    ${distBar('ou25', [{ code: 'over', label: '大', color: '#3b82f6' }, { code: 'under', label: '細', color: '#a855f7' }])}
-    ${distBar('btts', [{ code: 'yes', label: '互入', color: '#ec4899' }, { code: 'no', label: '冇互入', color: '#64748b' }])}
+    <div class="text-xs text-slate-500 mb-1">📊 ${totalBets} bets 注 · ${totalStake} pts 分 staked</div>
+    ${distBar('1x2', [{ code: 'home', label: m.homeTeam || 'Home 主', color: '#10b981' }, { code: 'draw', label: 'Draw 和', color: '#94a3b8' }, { code: 'away', label: m.awayTeam || 'Away 客', color: '#f59e0b' }])}
+    ${distBar('ou25', [{ code: 'over', label: 'Over 大', color: '#3b82f6' }, { code: 'under', label: 'Under 細', color: '#a855f7' }])}
+    ${distBar('btts', [{ code: 'yes', label: 'BTTS Y 互入', color: '#ec4899' }, { code: 'no', label: 'BTTS N 冇互入', color: '#64748b' }])}
   </div>`;
   const header = settled
-    ? `🏁 ${r.winners ?? '–'}/${r.total} 估中 · 結果`
-    : `🔓 已開波 · 大家估咗咩`;
+    ? `🏁 ${r.winners ?? '–'}/${r.total} correct · 估中 · 結果`
+    : `🔓 Kicked off — everyone's picks · 已開波 · 大家點估`;
   return `
     <div class="preds">
       <div class="preds-h">${header}</div>
       ${chart}
       <details class="preds-detail">
-        <summary>▸ 逐個玩家詳細 (${users.length} 人)</summary>
+        <summary>▸ Per-player detail · 逐個玩家 (${users.length})</summary>
         ${blocks}
       </details>
     </div>`;
