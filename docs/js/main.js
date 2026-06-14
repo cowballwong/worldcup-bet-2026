@@ -332,13 +332,13 @@ function matchPredictions(matchId) {
         </div>`;
     }).join('');
     return `
-      <div class="pred-user">
-        <div class="pred-user-head">
+      <details class="pred-user">
+        <summary class="pred-user-head">
           <span class="pred-who">${who}</span>
           <span class="pred-user-net ${netCls}">${netTxt} pts</span>
-        </div>
+        </summary>
         ${rows}
-      </div>`;
+      </details>`;
   }).join('');
   return `
     <div class="preds">
