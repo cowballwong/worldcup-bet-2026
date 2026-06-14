@@ -114,7 +114,7 @@ def _fetch_wc() -> dict:
 # count calls in a state file and hard-stop near the cap (finals still settle via
 # football-data, which is unaffected).
 QUOTA_FILE = Path(__file__).resolve().parent.parent / "state" / "apisports_quota.json"
-AF_DAILY_CAP = 90
+AF_DAILY_CAP = 100  # API-Football free tier = 100 req/day; use full allowance (live stats adds ~1 call/scan)
 AF_LIVE_SHORTS = {"1H", "2H", "ET", "BT", "P", "HT", "LIVE", "INT"}
 
 
