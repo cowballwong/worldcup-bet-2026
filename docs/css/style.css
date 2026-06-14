@@ -486,6 +486,15 @@ img.emoji {
 [data-theme="dark"] .pred-row .pred-pick { color: #94a3b8; }
 [data-theme="dark"] .pred-row.won .pred-res { color: #4ade80; }
 [data-theme="dark"] .pred-row.lost .pred-res { color: #f87171; }
+/* Per-user grouping inside a finished match's reveal */
+.pred-user { margin: 6px 0; padding: 5px 7px; background: #f8fafc; border-radius: 8px; }
+.pred-user-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+.pred-user-head .pred-who { font-weight: 700; font-size: 12px; }
+.pred-user-net { font-family: ui-monospace, monospace; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+[data-theme="dark"] .pred-user { background: #1e293b; }
+/* Idle (never-bet) players sink to the bottom of the leaderboard, muted */
+.leaderboard-row.is-idle { opacity: .55; }
+.leaderboard-row.is-idle .rank-medal { color: #94a3b8; font-size: 14px; }
 
 /* Sticky tab bar under the sticky header */
 #tabbar { position: sticky; top: 0; z-index: 9; background: #f8fafc; }

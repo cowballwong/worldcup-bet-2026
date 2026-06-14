@@ -192,27 +192,58 @@ function renderAIBets(bets) {
     root.innerHTML = '<p class="text-slate-500 text-sm">LillyRose hasn\'t bet on anything yet. Admin: open the admin panel and press <b>Generate LillyRose picks</b> to seed her bets for upcoming matches.</p>';
     return;
   }
-  root.innerHTML = bets.map(b => {
+  // Group LillyRose's bets by match, tiered like My Bets (live → upcoming → finished).
+  const groups = new Map();
+  for (const b of bets) {
+    if (!groups.has(b.matchId)) groups.set(b.matchId, []);
+    groups.get(b.matchId).push(b);
+  }
+  const koMs = id => { const m = matchesCache.get(id); return m ? new Date(m.kickoffISO).getTime() : Infinity; };
+  const tierOf = id => {
+    const m = matchesCache.get(id);
+    if (!m) return 1;
+    if (m.status === 'settled') return 2;
+    if (m.status === 'live' || isPastKickoff(m)) return 0;
+    return 1;
+  };
+  const betRow = (b) => {
     const statusClass = b.status === 'won' ? 'is-won' : b.status === 'lost' ? 'is-lost' : '';
     const payout = b.status === 'won' ? `+${b.payout ?? Math.round(b.stake * b.odds)}` :
                    b.status === 'lost' ? `-${b.stake}` : `${b.stake}`;
     const payoutCls = b.status === 'won' ? 'text-emerald-700' : b.status === 'lost' ? 'text-rose-600' : 'text-slate-500';
-    const m = matchesCache.get(b.matchId);
-    const matchLabel = m
-      ? `${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)}`
-      : b.matchLabel;
     return `
       <div class="bet-history-row ${statusClass}">
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium">${matchLabel}</div>
           <div class="text-xs text-slate-500">${b.marketLabel} → ${b.selectionLabel} @ ${b.odds}</div>
         </div>
         <div class="text-right">
           <div class="font-semibold ${payoutCls}">${payout} pts</div>
           <span class="status-badge ${b.status}">${b.status}</span>
         </div>
-      </div>
-    `;
+      </div>`;
+  };
+  const groupHtml = mid => {
+    const gbets = groups.get(mid);
+    const m = matchesCache.get(mid);
+    const matchLabel = m
+      ? `${m.homeFlag || ''} ${teamLabel(m.homeTeam)} <span class="text-slate-400">vs</span> ${teamLabel(m.awayTeam)} ${m.awayFlag || ''}`
+      : (gbets[0].matchLabel || 'Match');
+    const ko = m ? formatKickoff(new Date(m.kickoffISO)) : '';
+    return `<div class="bet-group">
+        <div class="bet-group-head"><span>${matchLabel}</span>${ko ? `<span class="bet-group-ko">${ko}</span>` : ''}</div>
+        ${gbets.map(betRow).join('')}
+      </div>`;
+  };
+  const ids = [...groups.keys()];
+  const tiers = [
+    { key: 0, label: '🔴 進行中 · Live',        cmp: (a, b) => koMs(a) - koMs(b) },
+    { key: 1, label: '🟢 即將開波 · Upcoming',  cmp: (a, b) => koMs(a) - koMs(b) },
+    { key: 2, label: '✓ 已完場 · Finished',     cmp: (a, b) => koMs(b) - koMs(a) },
+  ];
+  root.innerHTML = tiers.map(t => {
+    const tids = ids.filter(id => tierOf(id) === t.key).sort(t.cmp);
+    if (!tids.length) return '';
+    return `<div class="bet-tier-label">${t.label}</div>` + tids.map(groupHtml).join('');
   }).join('');
 }
 
@@ -230,6 +261,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     $(`tab-${tab}`).classList.remove('hidden');
+    // Every time the Matches tab is opened, jump to the current/latest match.
+    if (tab === 'matches') {
+      setTimeout(() => {
+        const nx = document.querySelector('#match-list .match-card.is-next')
+                || document.querySelector('#match-list .match-card:not(.is-settled)');
+        if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+      }, 60);
+    }
   });
 });
 
@@ -268,23 +307,43 @@ function subscribeResults() {
 function matchPredictions(matchId) {
   const r = resultsByMatch.get(matchId);
   if (!r || !Array.isArray(r.predictions) || r.predictions.length === 0) return '';
-  const rows = [...r.predictions].sort((a, b) => (b.status === 'won') - (a.status === 'won'));
-  const items = rows.map(p => {
-    const won = p.status === 'won';
-    const who = p.isAI ? `🤖 ${p.displayName}` : p.displayName;
-    const res = won ? `+${p.payout ?? Math.round(p.stake * p.odds)}` : `-${p.stake}`;
+  // Group every player's predictions for this match together, with their net.
+  const byUser = new Map();
+  for (const p of r.predictions) {
+    const key = p.userId || p.displayName;
+    if (!byUser.has(key)) byUser.set(key, { name: p.displayName, isAI: p.isAI, preds: [], net: 0 });
+    const u = byUser.get(key);
+    u.preds.push(p);
+    u.net += (p.status === 'won') ? ((p.payout ?? Math.round(p.stake * p.odds)) - p.stake) : -p.stake;
+  }
+  const users = [...byUser.values()].sort((a, b) => b.net - a.net);  // best first
+  const blocks = users.map(u => {
+    const who = u.isAI ? `🤖 ${u.name}` : u.name;
+    const netCls = u.net > 0 ? 'text-emerald-700' : u.net < 0 ? 'text-rose-600' : 'text-slate-500';
+    const netTxt = `${u.net > 0 ? '+' : ''}${u.net}`;
+    const rows = u.preds.map(p => {
+      const won = p.status === 'won';
+      const res = won ? `+${p.payout ?? Math.round(p.stake * p.odds)}` : `-${p.stake}`;
+      return `
+        <div class="pred-row ${won ? 'won' : 'lost'}">
+          <span class="pred-ic">${won ? '✅' : '❌'}</span>
+          <span class="pred-pick">${p.selectionLabel || p.marketLabel} @ ${p.odds}</span>
+          <span class="pred-res">${res}</span>
+        </div>`;
+    }).join('');
     return `
-      <div class="pred-row ${won ? 'won' : 'lost'}">
-        <span class="pred-ic">${won ? '✅' : '❌'}</span>
-        <span class="pred-who">${who}</span>
-        <span class="pred-pick">${p.selectionLabel || p.marketLabel} @ ${p.odds}</span>
-        <span class="pred-res">${res}</span>
+      <div class="pred-user">
+        <div class="pred-user-head">
+          <span class="pred-who">${who}</span>
+          <span class="pred-user-net ${netCls}">${netTxt} pts</span>
+        </div>
+        ${rows}
       </div>`;
   }).join('');
   return `
     <div class="preds">
-      <div class="preds-h">🏁 ${r.winners}/${r.total} 估中 · 結果</div>
-      ${items}
+      <div class="preds-h">🏁 ${r.winners}/${r.total} 估中 · 結果(按玩家)</div>
+      ${blocks}
     </div>`;
 }
 
@@ -687,25 +746,20 @@ function renderLeaderboard(rows) {
     return;
   }
   const medals = ['🥇', '🥈', '🥉'];
-  // Competition (1224) ranking: tied players share the lowest rank, the
-  // next non-tied player skips. So 1000 / 1000 / 950 / 900 → 1 / 1 / 3 / 4.
-  // Ranked by ASSET VALUE (cash + locked stake), computed in subscribeLeaderboard.
-  let rank = 0;
-  let prevAsset = null;
-  const ranked = rows.map((r, i) => {
-    const asset = (r.balance || 0) + (r.openStake || 0);
-    if (asset !== prevAsset) rank = i + 1;
-    prevAsset = asset;
-    return { ...r, rank, asset };
-  });
-
   const flags = teamFlagMap();
   const champSettled = championConfig && championConfig.championSettled;
   const actualChamp = championConfig && championConfig.champion;
-  root.innerHTML = ranked.map(r => {
+
+  // "Never bet" = untouched starting balance AND nothing locked. Push these idle
+  // players to the bottom, separated, so they don't sit above people who actually
+  // played (and lost below the starting balance).
+  const STARTING = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.startingBalance) || 1000;
+  const everBet = r => !(((r.balance || 0) === STARTING) && ((r.openStake || 0) === 0));
+  const active = rows.filter(everBet);   // rows already sorted by asset desc
+  const idle = rows.filter(r => !everBet(r));
+
+  const rowHtml = (r, medal) => {
     const isMe = currentUser && r.uid === currentUser.uid;
-    const medal = medals[r.rank - 1] || r.rank;
-    // Champion pick line (everyone can see everyone's pick).
     const cp = championsByUid.get(r.uid);
     let champHtml = '<span class="lb-champ none">👑 —</span>';
     if (cp && cp.pick) {
@@ -715,8 +769,8 @@ function renderLeaderboard(rows) {
       champHtml = `<span class="lb-champ ${cls}">👑 ${flag} ${escHtml(cp.pick)}${hit === true ? ' ✅' : ''}</span>`;
     }
     return `
-      <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
-        <span class="rank-medal">${medal}</span>
+      <div class="leaderboard-row ${isMe ? 'is-me' : ''} ${medal === null ? 'is-idle' : ''}">
+        <span class="rank-medal">${medal === null ? '·' : medal}</span>
         <span class="flex-1 min-w-0">
           <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
           ${champHtml}
@@ -725,9 +779,23 @@ function renderLeaderboard(rows) {
           <span class="font-semibold block">${r.asset}<span class="text-[11px] font-normal text-slate-400"> 實分</span></span>
           <span class="block text-xs text-slate-500">${r.balance}<span class="text-[11px] text-slate-400"> 現金</span></span>
         </span>
-      </div>
-    `;
+      </div>`;
+  };
+
+  // Competition (1224) ranking among ACTIVE players, by asset value.
+  let rank = 0, prevAsset = null;
+  const activeHtml = active.map((r, i) => {
+    if (r.asset !== prevAsset) rank = i + 1;
+    prevAsset = r.asset;
+    return rowHtml(r, medals[rank - 1] || rank);
   }).join('');
+
+  const idleHtml = idle.length
+    ? '<div class="bet-tier-label" style="opacity:.65">— 未開始投注 · not playing yet —</div>'
+      + idle.map(r => rowHtml(r, null)).join('')
+    : '';
+
+  root.innerHTML = activeHtml + idleHtml || '<p class="text-slate-500 text-sm">No players yet.</p>';
 }
 
 // ── My Bets ────────────────────────────────────────────────────
