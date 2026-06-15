@@ -398,22 +398,25 @@ function maybeScrollToNext(nextId, matches) {
 // Live minute display: API base minute + real minutes elapsed since capture.
 // Accepts a number (render time) or a string (ticker, from data-min). Caps so a
 // stuck/never-settled live match can't run away past extra time.
-function liveMinuteText(min, _atMs) {
-  // ESPN (our live source) already gives a display-ready clock STRING:
-  // "86'", "45'+2'", "HT"/"Halftime", "FT". Show it VERBATIM — re-synced every
-  // cron write via the live onSnapshot listener.
-  // NOTE: an earlier version added real wall-clock minutes elapsed since the last
-  // write on top of the base minute. That ran away during half-time / stoppage /
-  // stale syncs (counting the HT break as play, climbing to the 130' cap) and
-  // showed wildly wrong minutes. No local ticking now. _atMs is accepted but
-  // ignored for backward-compat with the 15s re-render ticker.
+function liveMinuteText(min, atMs) {
+  // ESPN (our live source) gives a clock STRING: "81'", "45'+2'", "HT"/"Halftime",
+  // "FT". We tick locally between the ~5-min cron syncs so the clock looks alive,
+  // but the advance is HARD-CAPPED at +6 min: ESPN re-syncs the base minute every
+  // cron write (onSnapshot), so we never need more than one window's worth. If
+  // updatedAt freezes (match ended / cron stalled) the clock simply can't run away
+  // past base+6 — this kills the old runaway that climbed to the 130' cap and
+  // counted the half-time break as play time. Half-time / full-time never tick.
   if (min === '' || min === null || min === undefined) return '●';
   const s = String(min).trim();
   if (!s) return '●';
   const t = s.toLowerCase();
   if (t === 'ht' || t.includes('half')) return '● HT';
   if (t === 'ft' || t.includes('full')) return "● FT";
-  return '● ' + s;
+  const base = parseInt(s, 10);              // leading int of "81'" / "45'+2'"
+  if (Number.isNaN(base)) return '● ' + s;   // unknown format → show raw
+  const elapsed = atMs ? Math.floor((Date.now() - atMs) / 60000) : 0;
+  const extra = Math.min(Math.max(0, elapsed), 6);   // cap the local advance
+  return '● ' + (base + extra) + "'";
 }
 // One global ticker re-renders every live clock each 15s (minute granularity).
 if (!window.__wcLiveTicker) {
