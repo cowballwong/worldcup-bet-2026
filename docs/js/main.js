@@ -398,21 +398,22 @@ function maybeScrollToNext(nextId, matches) {
 // Live minute display: API base minute + real minutes elapsed since capture.
 // Accepts a number (render time) or a string (ticker, from data-min). Caps so a
 // stuck/never-settled live match can't run away past extra time.
-function liveMinuteText(min, atMs) {
+function liveMinuteText(min, _atMs) {
+  // ESPN (our live source) already gives a display-ready clock STRING:
+  // "86'", "45'+2'", "HT"/"Halftime", "FT". Show it VERBATIM — re-synced every
+  // cron write via the live onSnapshot listener.
+  // NOTE: an earlier version added real wall-clock minutes elapsed since the last
+  // write on top of the base minute. That ran away during half-time / stoppage /
+  // stale syncs (counting the HT break as play, climbing to the 130' cap) and
+  // showed wildly wrong minutes. No local ticking now. _atMs is accepted but
+  // ignored for backward-compat with the 15s re-render ticker.
   if (min === '' || min === null || min === undefined) return '●';
-  // ESPN (primary source) writes minute as a STRING: "86'", "45'+2'", "HT",
-  // "Halftime", "FT". API-Football used a bare integer. Handle both.
   const s = String(min).trim();
-  if (/[A-Za-z]/.test(s)) {                       // break/non-numeric label
-    const t = s.toLowerCase();
-    if (t === 'ht' || t.includes('half')) return '● HT';
-    if (t === 'ft' || t.includes('full')) return "● FT";
-    return '● ' + s;                              // show whatever ESPN gave
-  }
-  const base = parseInt(s, 10);                   // leading int of "86'" / "45'+2'"
-  if (Number.isNaN(base)) return '●';
-  const extra = Math.max(0, Math.floor((Date.now() - (atMs || Date.now())) / 60000));
-  return '● ' + Math.min(base + extra, 130) + "'";
+  if (!s) return '●';
+  const t = s.toLowerCase();
+  if (t === 'ht' || t.includes('half')) return '● HT';
+  if (t === 'ft' || t.includes('full')) return "● FT";
+  return '● ' + s;
 }
 // One global ticker re-renders every live clock each 15s (minute granularity).
 if (!window.__wcLiveTicker) {
