@@ -20,6 +20,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -75,6 +76,11 @@ def _norm(name: str) -> str:
     s = (name or "").lower().strip()
     s = ALIASES.get(s, s)
     s = s.replace("&", "").replace(" and ", " ")
+    # Transliterate accents to ASCII so precomposed vs decomposed forms match
+    # (e.g. our DB's "Côte d'Ivoire" precomposed ô vs ESPN's decomposed ô — without
+    # this the keys diverge to "ctedivoire" vs "cotedivoire" and the match never
+    # settles). NFKD splits "ô"→"o"+combining mark; we then strip the marks.
+    s = unicodedata.normalize("NFKD", s)
     s = re.sub(r"[^a-z0-9]", "", s)
     return s
 
