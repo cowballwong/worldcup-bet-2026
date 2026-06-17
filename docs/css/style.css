@@ -589,3 +589,13 @@ img.emoji {
 .profile-chart-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px; }
 .dark .stat-cell, .dark .profile-chart-card { background:#1e293b; border-color:#334155; }
 .dark .profile-chart-card h3, .dark .stat-cell .font-extrabold { color:#e2e8f0; }
+
+/* inline expand (accordion) under a leaderboard row */
+.lb-entry { display:flex; flex-direction:column; }
+.lb-chevron { transition: transform .18s ease; display:inline-block; }
+.leaderboard-row.is-open .lb-chevron { transform: rotate(180deg); }
+.lb-profile-panel { overflow:hidden; }
+.lb-profile-inner { padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-top:0;
+  border-radius:0 0 12px 12px; margin:-4px 4px 6px; animation: lbSlideDown .18s ease-out; }
+@keyframes lbSlideDown { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform:none; } }
+.dark .lb-profile-inner { background:#0f172a; border-color:#334155; }

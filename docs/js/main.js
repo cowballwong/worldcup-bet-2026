@@ -901,16 +901,21 @@ function renderLeaderboard(rows) {
       champHtml = `<span class="lb-champ ${cls}">👑 ${flag} ${escHtml(cp.pick)}${hit === true ? ' ✅' : ''}</span>`;
     }
     return `
-      <div class="leaderboard-row cursor-pointer ${isMe ? 'is-me' : ''} ${medal === null ? 'is-idle' : ''}" data-uid="${r.uid}" data-rank="${rankNum || ''}">
-        <span class="rank-medal">${medal === null ? '·' : medal}</span>
-        <span class="flex-1 min-w-0">
-          <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
-          ${champHtml}
-        </span>
-        <span class="text-right whitespace-nowrap leading-tight">
-          <span class="font-semibold block">${r.asset}<span class="text-[11px] font-normal text-slate-400"> 實分</span></span>
-          <span class="block text-xs text-slate-500">${r.balance}<span class="text-[11px] text-slate-400"> 現金</span></span>
-        </span>
+      <div class="lb-entry">
+        <div class="leaderboard-row cursor-pointer ${isMe ? 'is-me' : ''} ${medal === null ? 'is-idle' : ''}" data-uid="${r.uid}" data-rank="${rankNum || ''}">
+          <span class="rank-medal">${medal === null ? '·' : medal}</span>
+          ${_avatarHtml(r, 'w-7 h-7 text-xs')}
+          <span class="flex-1 min-w-0">
+            <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
+            ${champHtml}
+          </span>
+          <span class="text-right whitespace-nowrap leading-tight">
+            <span class="font-semibold block">${r.asset}<span class="text-[11px] font-normal text-slate-400"> 實分</span></span>
+            <span class="block text-xs text-slate-500">${r.balance}<span class="text-[11px] text-slate-400"> 現金</span></span>
+          </span>
+          <span class="lb-chevron text-slate-400 ml-1">▾</span>
+        </div>
+        <div class="lb-profile-panel" data-panel-uid="${r.uid}" hidden></div>
       </div>`;
   };
 
@@ -929,25 +934,51 @@ function renderLeaderboard(rows) {
 
   root.innerHTML = activeHtml + idleHtml || '<p class="text-slate-500 text-sm">No players yet.</p>';
 
-  // Click a player → open their stats profile modal.
+  // Click a player → expand their stats panel inline (accordion).
   root.querySelectorAll('.leaderboard-row[data-uid]').forEach(el => {
     el.addEventListener('click', () => {
       const row = leaderboardRows.find(r => r.uid === el.dataset.uid);
-      if (row) openPlayerProfile(row, el.dataset.rank);
+      const panel = el.parentElement.querySelector('.lb-profile-panel');
+      if (row && panel) togglePlayerProfile(row, el, panel, el.dataset.rank);
     });
   });
 }
 
-// ── Player profile modal ───────────────────────────────────────
-// Click a leaderboard player → a stats card. Data comes from the PUBLIC `results`
-// collection (resultsByMatch), NOT the bets collection (rules block reading other
-// players' raw bets). results carry each player's per-match predictions, revealed
-// at kickoff and stamped won/lost at settlement — exactly the settled history we
-// need for P&L. Avatar = the user doc's photoURL (their Google picture).
+// ── Player profile (inline accordion) ──────────────────────────
+// Click a leaderboard player → their row EXPANDS DOWNWARD with a stats panel
+// (one open at a time). Data comes from the PUBLIC `results` collection
+// (resultsByMatch), NOT the bets collection (rules block reading other players'
+// raw bets). results carry each player's per-match predictions, revealed at
+// kickoff and stamped won/lost at settlement — exactly the settled history we need
+// for P&L. Avatar = the user doc's photoURL (their Google picture).
 let _profileCharts = [];
+let _openProfileUid = null;
+
+function _avatarHtml(r, sizeCls) {
+  const initial = ((r.displayName || '?').trim().charAt(0).toUpperCase()) || '?';
+  const fallback = `Object.assign(document.createElement('div'),{className:'${sizeCls} rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shrink-0',textContent:'${initial}'})`;
+  if (r.photoURL) {
+    return `<img src="${escHtml(r.photoURL)}" referrerpolicy="no-referrer" alt="" class="${sizeCls} rounded-full object-cover bg-emerald-500 shrink-0" onerror="this.replaceWith(${fallback})" />`;
+  }
+  return `<div class="${sizeCls} rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shrink-0">${initial}</div>`;
+}
+
 function _killProfileCharts() {
   _profileCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
   _profileCharts = [];
+}
+
+function _collapseOpenProfile() {
+  _killProfileCharts();
+  if (!_openProfileUid) return;
+  const root = document.getElementById('leaderboard-list');
+  const prev = root && root.querySelector(`.lb-profile-panel[data-panel-uid="${_openProfileUid}"]`);
+  if (prev) {
+    prev.hidden = true; prev.innerHTML = '';
+    const r = prev.parentElement.querySelector('.leaderboard-row');
+    if (r) r.classList.remove('is-open');
+  }
+  _openProfileUid = null;
 }
 
 function _playerNet(p) {
@@ -1006,30 +1037,18 @@ function gatherPlayerStats(uid) {
   };
 }
 
-function closePlayerProfile() {
-  _killProfileCharts();
-  const m = document.getElementById('profile-modal');
-  if (m) m.classList.add('hidden');
+function togglePlayerProfile(row, rowEl, panel, rankNum) {
+  if (_openProfileUid === row.uid) { _collapseOpenProfile(); return; }  // click again = close
+  _collapseOpenProfile();                                              // accordion: close any other
+  if (!window.Chart) { toast('Charts loading… try again'); return; }
+  renderProfileInto(panel, row, rankNum);
+  rowEl.classList.add('is-open');
+  _openProfileUid = row.uid;
+  setTimeout(() => { try { panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 80);
 }
 
-function openPlayerProfile(row, rankNum) {
-  if (!window.Chart) { toast('Charts loading… try again'); return; }
-  _killProfileCharts();
+function renderProfileInto(panel, row, rankNum) {
   const s = gatherPlayerStats(row.uid);
-
-  let modal = document.getElementById('profile-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'profile-modal';
-    document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if (e.target === modal) closePlayerProfile(); });
-  }
-  modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-4';
-
-  const initial = (row.displayName || '?').trim().charAt(0).toUpperCase() || '?';
-  const avatar = row.photoURL
-    ? `<img src="${escHtml(row.photoURL)}" referrerpolicy="no-referrer" alt="" class="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-300 bg-emerald-500" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold ring-2 ring-emerald-300',textContent:'${initial}'}))" />`
-    : `<div class="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold ring-2 ring-emerald-300">${initial}</div>`;
   const rankBadge = rankNum ? `<span class="text-[11px] bg-amber-400 text-amber-900 font-bold px-1.5 py-0.5 rounded">🏅 #${rankNum}</span>` : '';
   const netCls = s.totalNet > 0 ? 'text-emerald-600' : s.totalNet < 0 ? 'text-rose-600' : 'text-slate-800';
   const roiCls = s.roi > 0 ? 'text-emerald-600' : s.roi < 0 ? 'text-rose-600' : 'text-slate-800';
@@ -1040,11 +1059,24 @@ function openPlayerProfile(row, rankNum) {
   const stat = (val, cls, label) =>
     `<div class="stat-cell"><div class="text-lg font-extrabold ${cls}">${val}</div><div class="text-[10px] text-slate-500">${label}</div></div>`;
 
+  const header = `
+    <div class="flex items-center gap-2 mb-3">
+      ${_avatarHtml(row, 'w-9 h-9 text-sm')}
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2"><span class="font-bold text-slate-800 truncate">${escHtml(row.displayName || 'Player')}</span>${rankBadge}</div>
+        <div class="text-[11px] text-slate-500">Player profile · 球員檔案</div>
+      </div>
+      <div class="text-right">
+        <div class="font-extrabold text-emerald-700">${(row.asset ?? row.balance ?? 0).toLocaleString()}</div>
+        <div class="text-[10px] text-slate-400">asset · 實分</div>
+      </div>
+    </div>`;
+
   const empty = s.settledCount === 0;
   const body = empty
-    ? `<div class="p-8 text-center text-slate-500 text-sm">未有已結算嘅注 · no settled bets yet 🎟️<br><span class="text-xs">下注 + 賽事完場後就會有統計</span></div>`
+    ? `<div class="py-6 text-center text-slate-500 text-sm">未有已結算嘅注 · no settled bets yet 🎟️<br><span class="text-xs">下注 + 賽事完場後就會有統計</span></div>`
     : `
-      <div class="p-4 space-y-4">
+      <div class="space-y-3">
         <div class="grid grid-cols-3 gap-2 text-center">
           ${stat(sign(s.totalNet), netCls, 'Net P&L · 淨賺蝕')}
           ${stat(s.winRate + '%', 'text-slate-800', 'Win rate · 勝率')}
@@ -1064,27 +1096,9 @@ function openPlayerProfile(row, rankNum) {
         ${s.topTeams.length ? `<div class="profile-chart-card"><div class="flex items-baseline justify-between mb-1"><h3 class="text-sm font-semibold text-slate-700">Most-backed teams</h3><span class="text-[11px] text-slate-400">最愛球隊</span></div><canvas id="pc-teams" height="${20 + s.topTeams.length * 22}"></canvas></div>` : ''}
       </div>`;
 
-  modal.innerHTML = `
-    <div class="w-[440px] max-w-full bg-white rounded-2xl shadow-2xl overflow-hidden my-auto">
-      <div class="bg-emerald-700 text-white px-5 pt-4 pb-5">
-        <div class="flex items-center gap-3">
-          ${avatar}
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2"><h2 class="font-bold text-lg leading-tight truncate">${escHtml(row.displayName || 'Player')}</h2>${rankBadge}</div>
-            <p class="text-xs text-emerald-200">Player profile · 球員檔案</p>
-          </div>
-          <div class="text-right">
-            <div class="text-2xl font-extrabold leading-none">${(row.asset ?? row.balance ?? 0).toLocaleString()}</div>
-            <div class="text-[11px] text-emerald-200">asset · 實分</div>
-          </div>
-          <button id="profile-close" class="ml-1 text-emerald-200 hover:text-white text-xl leading-none">✕</button>
-        </div>
-      </div>
-      ${body}
-    </div>`;
-  modal.classList.remove('hidden');
-  if (window.twemoji) try { twemoji.parse(modal); } catch (e) {}
-  document.getElementById('profile-close').addEventListener('click', closePlayerProfile);
+  panel.innerHTML = `<div class="lb-profile-inner">${header}${body}</div>`;
+  panel.hidden = false;
+  if (window.twemoji) try { twemoji.parse(panel); } catch (e) {}
 
   if (empty) return;
 
@@ -1120,8 +1134,8 @@ function openPlayerProfile(row, rankNum) {
   }
 }
 
-// Close the profile on Escape.
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayerProfile(); });
+// Collapse the open profile on Escape.
+document.addEventListener('keydown', e => { if (e.key === 'Escape') _collapseOpenProfile(); });
 
 // ── My Bets ────────────────────────────────────────────────────
 function subscribeMyBets() {
