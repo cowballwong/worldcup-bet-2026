@@ -583,3 +583,9 @@ img.emoji {
 [data-theme="dark"] .lstat-pv { color:#e2e8f0; }
 [data-theme="dark"] .lstat-bar { background:#334155; }
 [data-theme="dark"] .lstat-mid { color:#94a3b8; }
+
+/* ── Player profile modal (leaderboard click-through) ── */
+.stat-cell { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:8px 4px; }
+.profile-chart-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px; }
+.dark .stat-cell, .dark .profile-chart-card { background:#1e293b; border-color:#334155; }
+.dark .profile-chart-card h3, .dark .stat-cell .font-extrabold { color:#e2e8f0; }

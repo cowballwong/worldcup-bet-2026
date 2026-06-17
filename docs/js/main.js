@@ -890,7 +890,7 @@ function renderLeaderboard(rows) {
   const active = rows.filter(everBet);   // rows already sorted by asset desc
   const idle = rows.filter(r => !everBet(r));
 
-  const rowHtml = (r, medal) => {
+  const rowHtml = (r, medal, rankNum) => {
     const isMe = currentUser && r.uid === currentUser.uid;
     const cp = championsByUid.get(r.uid);
     let champHtml = '<span class="lb-champ none">👑 —</span>';
@@ -901,7 +901,7 @@ function renderLeaderboard(rows) {
       champHtml = `<span class="lb-champ ${cls}">👑 ${flag} ${escHtml(cp.pick)}${hit === true ? ' ✅' : ''}</span>`;
     }
     return `
-      <div class="leaderboard-row ${isMe ? 'is-me' : ''} ${medal === null ? 'is-idle' : ''}">
+      <div class="leaderboard-row cursor-pointer ${isMe ? 'is-me' : ''} ${medal === null ? 'is-idle' : ''}" data-uid="${r.uid}" data-rank="${rankNum || ''}">
         <span class="rank-medal">${medal === null ? '·' : medal}</span>
         <span class="flex-1 min-w-0">
           <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
@@ -919,16 +919,209 @@ function renderLeaderboard(rows) {
   const activeHtml = active.map((r, i) => {
     if (r.asset !== prevAsset) rank = i + 1;
     prevAsset = r.asset;
-    return rowHtml(r, medals[rank - 1] || rank);
+    return rowHtml(r, medals[rank - 1] || rank, rank);
   }).join('');
 
   const idleHtml = idle.length
     ? '<div class="bet-tier-label" style="opacity:.65">— 未開始投注 · not playing yet —</div>'
-      + idle.map(r => rowHtml(r, null)).join('')
+      + idle.map(r => rowHtml(r, null, null)).join('')
     : '';
 
   root.innerHTML = activeHtml + idleHtml || '<p class="text-slate-500 text-sm">No players yet.</p>';
+
+  // Click a player → open their stats profile modal.
+  root.querySelectorAll('.leaderboard-row[data-uid]').forEach(el => {
+    el.addEventListener('click', () => {
+      const row = leaderboardRows.find(r => r.uid === el.dataset.uid);
+      if (row) openPlayerProfile(row, el.dataset.rank);
+    });
+  });
 }
+
+// ── Player profile modal ───────────────────────────────────────
+// Click a leaderboard player → a stats card. Data comes from the PUBLIC `results`
+// collection (resultsByMatch), NOT the bets collection (rules block reading other
+// players' raw bets). results carry each player's per-match predictions, revealed
+// at kickoff and stamped won/lost at settlement — exactly the settled history we
+// need for P&L. Avatar = the user doc's photoURL (their Google picture).
+let _profileCharts = [];
+function _killProfileCharts() {
+  _profileCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
+  _profileCharts = [];
+}
+
+function _playerNet(p) {
+  if (p.status === 'won') return (p.payout ?? Math.round(p.stake * p.odds)) - p.stake;
+  if (p.status === 'lost') return -(p.stake || 0);
+  return 0;
+}
+
+function gatherPlayerStats(uid) {
+  const items = [];
+  resultsByMatch.forEach((r, matchId) => {
+    if (!r || !Array.isArray(r.predictions)) return;
+    const m = matchesCache.get(matchId);
+    const ko = m ? new Date(m.kickoffISO).getTime() : 0;
+    for (const p of r.predictions) {
+      if ((p.userId || '') !== uid) continue;
+      items.push({ ...p, matchId, ko });
+    }
+  });
+  items.sort((a, b) => a.ko - b.ko);              // chronological for the curve
+  const settled = items.filter(p => p.status === 'won' || p.status === 'lost');
+
+  const START = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.startingBalance) || 1000;
+  let won = 0, lost = 0, totalNet = 0, totalStaked = 0, running = START;
+  const curve = [START];
+  for (const p of settled) {
+    if (p.status === 'won') won++; else lost++;
+    const n = _playerNet(p);
+    totalNet += n; totalStaked += (p.stake || 0); running += n;
+    curve.push(running);
+  }
+  // trailing streak
+  let streak = 0, streakWon = null;
+  for (let i = settled.length - 1; i >= 0; i--) {
+    const w = settled[i].status === 'won';
+    if (streakWon === null) { streakWon = w; streak = 1; }
+    else if (w === streakWon) streak++;
+    else break;
+  }
+  // most-backed teams (only selections that map to a team flag)
+  const flags = teamFlagMap();
+  const counts = new Map();
+  for (const p of items) {
+    const sel = p.selectionLabel || '';
+    if (!sel || !flags[sel]) continue;
+    counts.set(sel, (counts.get(sel) || 0) + 1);
+  }
+  const topTeams = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  return {
+    totalBets: items.length, settledCount: settled.length,
+    won, lost, winRate: (won + lost) ? Math.round(won / (won + lost) * 100) : 0,
+    totalNet, roi: totalStaked ? Math.round(totalNet / totalStaked * 100) : 0,
+    curve, streak, streakWon, recent: settled.slice(-12).map(_playerNet),
+    topTeams, flags,
+  };
+}
+
+function closePlayerProfile() {
+  _killProfileCharts();
+  const m = document.getElementById('profile-modal');
+  if (m) m.classList.add('hidden');
+}
+
+function openPlayerProfile(row, rankNum) {
+  if (!window.Chart) { toast('Charts loading… try again'); return; }
+  _killProfileCharts();
+  const s = gatherPlayerStats(row.uid);
+
+  let modal = document.getElementById('profile-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'profile-modal';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) closePlayerProfile(); });
+  }
+  modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-4';
+
+  const initial = (row.displayName || '?').trim().charAt(0).toUpperCase() || '?';
+  const avatar = row.photoURL
+    ? `<img src="${escHtml(row.photoURL)}" referrerpolicy="no-referrer" alt="" class="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-300 bg-emerald-500" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold ring-2 ring-emerald-300',textContent:'${initial}'}))" />`
+    : `<div class="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold ring-2 ring-emerald-300">${initial}</div>`;
+  const rankBadge = rankNum ? `<span class="text-[11px] bg-amber-400 text-amber-900 font-bold px-1.5 py-0.5 rounded">🏅 #${rankNum}</span>` : '';
+  const netCls = s.totalNet > 0 ? 'text-emerald-600' : s.totalNet < 0 ? 'text-rose-600' : 'text-slate-800';
+  const roiCls = s.roi > 0 ? 'text-emerald-600' : s.roi < 0 ? 'text-rose-600' : 'text-slate-800';
+  const sign = v => (v > 0 ? '+' : '') + v;
+  const streakTxt = s.settledCount ? `${s.streakWon ? '🔥' : '🧊'} ${s.streakWon ? 'W' : 'L'}${s.streak}` : '—';
+  const streakCls = s.settledCount ? (s.streakWon ? 'text-orange-500' : 'text-sky-500') : 'text-slate-400';
+
+  const stat = (val, cls, label) =>
+    `<div class="stat-cell"><div class="text-lg font-extrabold ${cls}">${val}</div><div class="text-[10px] text-slate-500">${label}</div></div>`;
+
+  const empty = s.settledCount === 0;
+  const body = empty
+    ? `<div class="p-8 text-center text-slate-500 text-sm">未有已結算嘅注 · no settled bets yet 🎟️<br><span class="text-xs">下注 + 賽事完場後就會有統計</span></div>`
+    : `
+      <div class="p-4 space-y-4">
+        <div class="grid grid-cols-3 gap-2 text-center">
+          ${stat(sign(s.totalNet), netCls, 'Net P&L · 淨賺蝕')}
+          ${stat(s.winRate + '%', 'text-slate-800', 'Win rate · 勝率')}
+          ${stat(s.won + '–' + s.lost, 'text-slate-800', 'Record · 戰績')}
+          ${stat(sign(s.roi) + '%', roiCls, 'ROI · 回報率')}
+          ${stat(streakTxt, streakCls, 'Streak · 連績')}
+          ${stat(s.settledCount, 'text-slate-800', 'Settled · 已結算')}
+        </div>
+        <div class="profile-chart-card">
+          <div class="flex items-baseline justify-between mb-1"><h3 class="text-sm font-semibold text-slate-700">Bankroll over time</h3><span class="text-[11px] text-slate-400">資金曲線</span></div>
+          <canvas id="pc-bankroll" height="150"></canvas>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="profile-chart-card"><h3 class="text-sm font-semibold text-slate-700 mb-1">Win / Loss</h3><canvas id="pc-donut" height="120"></canvas></div>
+          <div class="profile-chart-card"><div class="flex items-baseline justify-between mb-1"><h3 class="text-sm font-semibold text-slate-700">Recent</h3><span class="text-[10px] text-slate-400">近 ${s.recent.length} 注</span></div><canvas id="pc-recent" height="120"></canvas></div>
+        </div>
+        ${s.topTeams.length ? `<div class="profile-chart-card"><div class="flex items-baseline justify-between mb-1"><h3 class="text-sm font-semibold text-slate-700">Most-backed teams</h3><span class="text-[11px] text-slate-400">最愛球隊</span></div><canvas id="pc-teams" height="${20 + s.topTeams.length * 22}"></canvas></div>` : ''}
+      </div>`;
+
+  modal.innerHTML = `
+    <div class="w-[440px] max-w-full bg-white rounded-2xl shadow-2xl overflow-hidden my-auto">
+      <div class="bg-emerald-700 text-white px-5 pt-4 pb-5">
+        <div class="flex items-center gap-3">
+          ${avatar}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2"><h2 class="font-bold text-lg leading-tight truncate">${escHtml(row.displayName || 'Player')}</h2>${rankBadge}</div>
+            <p class="text-xs text-emerald-200">Player profile · 球員檔案</p>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-extrabold leading-none">${(row.asset ?? row.balance ?? 0).toLocaleString()}</div>
+            <div class="text-[11px] text-emerald-200">asset · 實分</div>
+          </div>
+          <button id="profile-close" class="ml-1 text-emerald-200 hover:text-white text-xl leading-none">✕</button>
+        </div>
+      </div>
+      ${body}
+    </div>`;
+  modal.classList.remove('hidden');
+  if (window.twemoji) try { twemoji.parse(modal); } catch (e) {}
+  document.getElementById('profile-close').addEventListener('click', closePlayerProfile);
+
+  if (empty) return;
+
+  const C = window.Chart;
+  C.defaults.font.family = 'ui-sans-serif, system-ui, sans-serif';
+  const EM = '#047857', EM2 = '#10b981', ROSE = '#f43f5e', SLATE = '#94a3b8', GRID = '#f1f5f9';
+  const noLegend = { legend: { display: false } };
+
+  _profileCharts.push(new C(document.getElementById('pc-bankroll'), {
+    type: 'line',
+    data: { labels: s.curve.map((_, i) => i), datasets: [{ data: s.curve, borderColor: EM, backgroundColor: 'rgba(16,185,129,0.12)', fill: true, borderWidth: 2, pointRadius: 0, tension: 0.35 }] },
+    options: { animation: false, plugins: noLegend, scales: { x: { display: false }, y: { ticks: { font: { size: 10 }, color: SLATE }, grid: { color: GRID } } } },
+  }));
+
+  _profileCharts.push(new C(document.getElementById('pc-donut'), {
+    type: 'doughnut',
+    data: { labels: ['Won', 'Lost'], datasets: [{ data: [s.won, s.lost], backgroundColor: [EM2, ROSE], borderWidth: 0 }] },
+    options: { animation: false, cutout: '64%', plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10 } } } },
+  }));
+
+  _profileCharts.push(new C(document.getElementById('pc-recent'), {
+    type: 'bar',
+    data: { labels: s.recent.map((_, i) => i + 1), datasets: [{ data: s.recent, backgroundColor: s.recent.map(v => v >= 0 ? EM2 : ROSE), borderRadius: 2 }] },
+    options: { animation: false, plugins: noLegend, scales: { x: { display: false }, y: { ticks: { font: { size: 10 }, color: SLATE }, grid: { color: GRID } } } },
+  }));
+
+  if (s.topTeams.length) {
+    _profileCharts.push(new C(document.getElementById('pc-teams'), {
+      type: 'bar',
+      data: { labels: s.topTeams.map(([name]) => `${s.flags[name] || ''} ${name}`), datasets: [{ data: s.topTeams.map(([, n]) => n), backgroundColor: EM, borderRadius: 3 }] },
+      options: { animation: false, indexAxis: 'y', plugins: noLegend, scales: { x: { ticks: { font: { size: 10 }, color: SLATE, stepSize: 1 }, grid: { color: GRID } }, y: { ticks: { font: { size: 11 } }, grid: { display: false } } } },
+    }));
+  }
+}
+
+// Close the profile on Escape.
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayerProfile(); });
 
 // ── My Bets ────────────────────────────────────────────────────
 function subscribeMyBets() {
