@@ -1641,7 +1641,11 @@ function _killChampCharts() { _champCharts.forEach(c => { try { c.destroy(); } c
 function _collapseChamp() {
   _killChampCharts();
   if (!_openChampEls) return;
-  try { _openChampEls.panel.hidden = true; _openChampEls.panel.innerHTML = ''; _openChampEls.btn.classList.remove('is-open'); } catch (e) {}
+  try {
+    _openChampEls.panel.hidden = true; _openChampEls.panel.innerHTML = '';
+    _openChampEls.btn.classList.remove('is-open');
+    _openChampEls.btn.parentElement.classList.remove('is-open-entry');
+  } catch (e) {}
   _openChampEls = null;
 }
 
@@ -1708,6 +1712,7 @@ function toggleChampionPanel(team, btn, panel, locked) {
   _collapseChamp();
   renderChampionPanel(team, panel, locked);
   btn.classList.add('is-open');
+  btn.parentElement.classList.add('is-open-entry');   // span full grid width
   _openChampEls = { btn, panel, team };
   setTimeout(() => { try { panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 80);
 }

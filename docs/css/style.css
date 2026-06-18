@@ -598,6 +598,8 @@ img.emoji {
 @keyframes lbSlideDown { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform:none; } }
 
 /* ── Champion page: click team → inline stats panel ── */
+/* grid is 2–3 cols; an open team spans the full row so its panel isn't squished */
+.champ-entry.is-open-entry { grid-column: 1 / -1; }
 .champ-chevron { transition: transform .18s ease; display:inline-block; }
 .champ-team.is-open { border-bottom-left-radius:0; border-bottom-right-radius:0; }
 .champ-team.is-open .champ-chevron { transform: rotate(180deg); }
