@@ -1601,7 +1601,6 @@ function renderChampion() {
     return;
   }
   grid.classList.remove('hidden');
-  _killChampCharts(); _openChampEls = null;   // a fresh grid invalidates any open panel
   // Favourites first (shortest odds), so the risk/reward gradient is obvious.
   const om = oddsMap(), base = oddsBase();
   teams.sort((a, b) => championOddsFor(a, om) - championOddsFor(b, om) || a.localeCompare(b));
@@ -1612,43 +1611,29 @@ function renderChampion() {
     const odds = championOddsFor(t, om);
     const pay = championPayout(t, om, base);
     return `
-      <div class="champ-entry">
-        <button class="champ-team ${sel}" data-team="${escAttr(t)}">
-          <span class="champ-flag">${flag}</span>
-          <span class="champ-name"><span class="champ-en">${escHtml(t)}</span>${zh ? `<span class="champ-zh">${escHtml(zh)}</span>` : ''}</span>
-          <span class="champ-odds"><span class="champ-o">@${odds}</span><span class="champ-pay">+${pay}</span></span>
-          ${t === myPick ? '<span class="champ-check">✓</span>' : ''}
-          <span class="champ-chevron text-slate-400 ml-1">▾</span>
-        </button>
-        <div class="ct-panel" hidden></div>
-      </div>`;
+      <button class="champ-team ${sel}" data-team="${escAttr(t)}">
+        <span class="champ-flag">${flag}</span>
+        <span class="champ-name"><span class="champ-en">${escHtml(t)}</span>${zh ? `<span class="champ-zh">${escHtml(zh)}</span>` : ''}</span>
+        <span class="champ-odds"><span class="champ-o">@${odds}</span><span class="champ-pay">+${pay}</span></span>
+        ${t === myPick ? '<span class="champ-check">✓</span>' : '<span class="champ-info">ℹ️</span>'}
+      </button>`;
   }).join('');
 
-  // Click a team → expand its stats panel (NOT an instant pick anymore; picking
-  // is a button inside the panel). Works whether or not the pick window is locked.
+  // Click a team → open a stats POP-UP (not an instant pick; picking is a button
+  // inside the modal). Works whether or not the pick window is locked.
   grid.querySelectorAll('.champ-team[data-team]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const panel = btn.parentElement.querySelector('.ct-panel');
-      toggleChampionPanel(btn.dataset.team, btn, panel, locked);
-    });
+    btn.addEventListener('click', () => openChampionModal(btn.dataset.team, locked));
   });
 }
 
-// ── Champion team stats (all from data already loaded client-side) ──
-let _champCharts = [];
-let _openChampEls = null;   // { btn, panel, team }
-function _killChampCharts() { _champCharts.forEach(c => { try { c.destroy(); } catch (e) {} }); _champCharts = []; }
-function _collapseChamp() {
-  _killChampCharts();
-  if (!_openChampEls) return;
-  try {
-    _openChampEls.panel.hidden = true; _openChampEls.panel.innerHTML = '';
-    _openChampEls.btn.classList.remove('is-open');
-    _openChampEls.btn.parentElement.classList.remove('is-open-entry');
-  } catch (e) {}
-  _openChampEls = null;
-}
-
+// ── Champion team stats → POP-UP modal (data already loaded client-side) ──
+// Men's World Cup titles (through 2022) — static historical fact, not in game data.
+const WC_TITLES = {
+  'Brazil': [5, '1958·62·70·94·2002'], 'Germany': [4, '1954·74·90·2014'],
+  'Italy': [4, '1934·38·82·2006'], 'Argentina': [3, '1978·86·2022'],
+  'France': [2, '1998·2018'], 'Uruguay': [2, '1930·1950'],
+  'England': [1, '1966'], 'Spain': [1, '2010'],
+};
 const CHAMP_STAGE_ZH = { group: '小組', r32: '32強', r16: '16強', qf: '八強', sf: '四強', '3rd-place': '季軍', final: '決賽' };
 function _champStage(s) { return CHAMP_STAGE_ZH[s] || s || ''; }
 function _shortDate(iso) { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' }); } catch (e) { return ''; } }
@@ -1678,13 +1663,8 @@ function championStats(team) {
   const odds = championOddsFor(team, om);
   const pay = championPayout(team, om, base);
   const implied = odds ? Math.round(100 / odds) : 0;
-  // popularity among players
-  const counts = new Map();
-  championsByUid.forEach(cp => { if (cp && cp.pick) counts.set(cp.pick, (counts.get(cp.pick) || 0) + 1); });
-  const sortedPop = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const myCount = counts.get(team) || 0;
-  const popRank = sortedPop.findIndex(([t]) => t === team) + 1;
-  const topPop = sortedPop.slice(0, 5);
+  const wc = WC_TITLES[team];
+  const titles = wc ? wc[0] : 0, titleYears = wc ? wc[1] : '';
   // group standing
   let grp = null;
   for (const m of matchesCache.values()) { if (m.stage === 'group' && m.group && (m.homeTeam === team || m.awayTeam === team)) { grp = m.group; break; } }
@@ -1704,31 +1684,38 @@ function championStats(team) {
     .sort((a, b) => new Date(a.kickoffISO) - new Date(b.kickoffISO));
   let next = null;
   if (upcoming.length) { const m = upcoming[0], home = m.homeTeam === team; next = { opp: home ? m.awayTeam : m.homeTeam, oppFlag: home ? m.awayFlag : m.homeFlag, stage: m.stage, ko: m.kickoffISO }; }
-  return { odds, pay, implied, myCount, popRank, topPop, standing, form, next };
+  return { odds, pay, implied, titles, titleYears, standing, form, next };
 }
 
-function toggleChampionPanel(team, btn, panel, locked) {
-  if (_openChampEls && _openChampEls.team === team) { _collapseChamp(); return; }
-  _collapseChamp();
-  renderChampionPanel(team, panel, locked);
-  btn.classList.add('is-open');
-  btn.parentElement.classList.add('is-open-entry');   // span full grid width
-  _openChampEls = { btn, panel, team };
-  setTimeout(() => { try { panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 80);
-}
+let _champEscWired = false;
+function closeChampionModal() { const m = document.getElementById('champ-modal'); if (m) m.classList.add('hidden'); }
 
-function renderChampionPanel(team, panel, locked) {
+function openChampionModal(team, locked) {
   const s = championStats(team);
   const flags = teamFlagMap();
   const isMine = myChampion && myChampion.pick === team;
-  const popLbl = s.myCount ? `揀咗${s.popRank === 1 ? '(最熱)' : ''}` : '仲未有人揀';
+
+  let modal = document.getElementById('champ-modal');
+  if (!modal) {
+    modal = document.createElement('div'); modal.id = 'champ-modal'; modal.className = 'hidden';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeChampionModal(); });
+  }
+  if (!_champEscWired) { document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChampionModal(); }); _champEscWired = true; }
+
+  const flag = flags[team] || '🏳️';
+  const zh = TEAM_ZH[team] || '';
   const stat = (v, cls, l) => `<div class="ct-stat text-center"><div class="text-base font-extrabold ${cls}">${v}</div><div class="text-[10px] text-slate-500">${l}</div></div>`;
   const st = s.standing;
-  const standingRow = st ? `
-    <div class="ct-stat mb-2 flex items-center justify-between">
-      <div><span class="text-xs font-semibold text-slate-700">小組 Group ${st.group}</span> <span class="text-[11px] text-slate-500">· 第 ${st.pos} · ${st.Pts} 分</span></div>
-      <div class="text-[11px] text-slate-600">P${st.MP} · <span class="text-emerald-600 font-semibold">W${st.W}</span> D${st.D} L${st.L} · 入${st.GF} 失${st.GA}</div>
-    </div>` : '';
+  const standingRow = st
+    ? `<div class="ct-stat flex items-center justify-between">
+         <div><span class="text-xs font-semibold text-slate-700">小組 Group ${st.group}</span> <span class="text-[11px] text-slate-500">· 第 ${st.pos} · ${st.Pts} 分</span></div>
+         <div class="text-[11px] text-slate-600">P${st.MP} · <span class="text-emerald-600 font-semibold">W${st.W}</span> D${st.D} L${st.L} · 入${st.GF} 失${st.GA}</div>
+       </div>`
+    : `<div class="ct-stat text-center text-[11px] text-slate-500">小組賽未開始 / 已入淘汰賽</div>`;
+  const titleLine = s.titles
+    ? `<div class="ct-stat text-center text-xs text-slate-600">🏆 ${s.titles} 次世界盃冠軍 · <span class="text-slate-500">${s.titleYears}</span></div>`
+    : `<div class="ct-stat text-center text-xs text-slate-500">🏆 未贏過世界盃</div>`;
   const formHtml = s.form.length
     ? s.form.map(f => `<span class="ct-frm" style="background:${f === 'W' ? '#10b981' : f === 'L' ? '#f43f5e' : '#94a3b8'}">${f}</span>`).join('')
     : '<span class="text-[11px] text-slate-400">未開賽</span>';
@@ -1741,34 +1728,40 @@ function renderChampionPanel(team, panel, locked) {
       ? `<button class="w-full bg-emerald-100 text-emerald-700 font-semibold py-2.5 rounded-xl champ-pick-btn" data-pick="${escAttr(team)}">✓ 你嘅冠軍(撳其他隊可改)</button>`
       : `<button class="w-full bg-emerald-600 text-white font-semibold py-2.5 rounded-xl champ-pick-btn" data-pick="${escAttr(team)}">👑 揀佢做我嘅冠軍 · @${s.odds} → +${s.pay}</button>`;
 
-  panel.innerHTML = `<div class="ct-panel-inner">
-    <div class="grid grid-cols-3 gap-2 mb-3">
-      ${stat('@' + s.odds, 'text-emerald-700', '賠率 · 估中 +' + s.pay)}
-      ${stat(s.implied + '%', 'text-slate-800', '隱含機會 implied')}
-      ${stat(s.myCount || '0', 'text-amber-600', popLbl)}
-    </div>
-    ${standingRow}
-    <div class="flex items-center justify-between mb-3 text-xs gap-2">
-      <div class="flex items-center gap-1 shrink-0"><span class="text-slate-500 mr-1">近績</span>${formHtml}</div>
-      <div class="text-slate-600 text-right">${nextHtml}</div>
-    </div>
-    ${s.topPop.length ? `<div class="ct-stat mb-3"><div class="flex items-baseline justify-between mb-1"><span class="text-xs font-semibold text-slate-700">玩家冠軍熱度</span><span class="text-[10px] text-slate-400">邊隊最多人揀</span></div><canvas id="ct-pop" height="${20 + s.topPop.length * 22}"></canvas></div>` : ''}
-    ${pickBtn}
-  </div>`;
-  panel.hidden = false;
-  if (window.twemoji) try { twemoji.parse(panel); } catch (e) {}
-
-  const pb = panel.querySelector('.champ-pick-btn');
-  if (pb) pb.addEventListener('click', () => pickChampion(pb.dataset.pick));
-
-  if (window.Chart && s.topPop.length) {
-    const C = window.Chart;
-    _champCharts.push(new C(panel.querySelector('#ct-pop'), {
-      type: 'bar',
-      data: { labels: s.topPop.map(([t]) => `${flags[t] || ''} ${TEAM_ZH[t] || t}`), datasets: [{ data: s.topPop.map(([, n]) => n), backgroundColor: s.topPop.map(([t]) => t === team ? '#f59e0b' : '#047857'), borderRadius: 3 }] },
-      options: { animation: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 10 }, color: '#94a3b8', stepSize: 1 }, grid: { color: '#f1f5f9' } }, y: { ticks: { font: { size: 11 } }, grid: { display: false } } } },
-    }));
-  }
+  modal.innerHTML = `
+    <div class="ct-modal-card">
+      <div class="bg-emerald-700 text-white px-5 pt-4 pb-4 flex items-center gap-3">
+        <span class="text-3xl">${flag}</span>
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-lg leading-tight truncate">${escHtml(team)}</div>
+          ${zh ? `<div class="text-xs text-emerald-200">${escHtml(zh)}</div>` : ''}
+        </div>
+        <div class="text-right">
+          <div class="text-xl font-extrabold leading-none">@${s.odds}</div>
+          <div class="text-[11px] text-emerald-200">估中 +${s.pay}</div>
+        </div>
+        <button id="champ-modal-close" class="ml-1 text-emerald-200 hover:text-white text-xl leading-none">✕</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          ${stat('+' + s.pay, 'text-emerald-700', '估中派彩')}
+          ${stat(s.implied + '%', 'text-slate-800', '隱含機會')}
+          ${stat('🏆 ' + s.titles, 'text-amber-600', '世界盃冠軍')}
+        </div>
+        ${titleLine}
+        ${standingRow}
+        <div class="flex items-center justify-between text-xs gap-2">
+          <div class="flex items-center gap-1 shrink-0"><span class="text-slate-500 mr-1">近績</span>${formHtml}</div>
+          <div class="text-slate-600 text-right">${nextHtml}</div>
+        </div>
+        ${pickBtn}
+      </div>
+    </div>`;
+  modal.classList.remove('hidden');
+  if (window.twemoji) try { twemoji.parse(modal); } catch (e) {}
+  document.getElementById('champ-modal-close').addEventListener('click', closeChampionModal);
+  const pb = modal.querySelector('.champ-pick-btn');
+  if (pb) pb.addEventListener('click', () => { pickChampion(pb.dataset.pick); closeChampionModal(); });
 }
 
 async function pickChampion(team) {

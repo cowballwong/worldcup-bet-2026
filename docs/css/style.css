@@ -597,25 +597,27 @@ img.emoji {
   border-radius:0 0 12px 12px; margin:-4px 4px 6px; animation: lbSlideDown .18s ease-out; }
 @keyframes lbSlideDown { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform:none; } }
 
-/* ── Champion page: click team → inline stats panel ── */
-/* grid is 2–3 cols; an open team spans the full row so its panel isn't squished */
-.champ-entry.is-open-entry { grid-column: 1 / -1; }
-.champ-chevron { transition: transform .18s ease; display:inline-block; }
-.champ-team.is-open { border-bottom-left-radius:0; border-bottom-right-radius:0; }
-.champ-team.is-open .champ-chevron { transform: rotate(180deg); }
-.ct-panel { overflow:hidden; }
-.ct-panel-inner { padding:12px; background:#f0fdf4; border:1px solid #6ee7b7; border-top:0;
-  border-radius:0 0 12px 12px; margin:-2px 2px 8px; animation: lbSlideDown .18s ease-out; }
+/* ── Champion: click team → stats POP-UP (modal) ── */
+.champ-info { opacity:.45; font-size:.8rem; margin-left:.25rem; }
 .ct-stat { background:#fff; border:1px solid #d1fae5; border-radius:10px; padding:6px 8px; }
 .ct-frm { display:inline-flex; width:1.25rem; height:1.25rem; align-items:center; justify-content:center;
   border-radius:5px; font-size:.7rem; font-weight:700; color:#fff; }
+#champ-modal { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.5); padding:1rem;
+  display:flex; align-items:center; justify-content:center; overflow-y:auto; }
+#champ-modal.hidden { display:none; }
+.ct-modal-card { width:440px; max-width:100%; margin:auto; background:#fff; border-radius:1rem;
+  box-shadow:0 20px 45px rgba(0,0,0,.3); overflow:hidden; animation: lbSlideDown .18s ease-out; }
 
-/* ── Dark mode for both panels (game uses html[data-theme="dark"], NOT .dark) ── */
+/* ── Dark mode for both panels (game themes via html[data-theme="dark"], NOT .dark) ── */
 [data-theme="dark"] .stat-cell,
 [data-theme="dark"] .profile-chart-card { background:#1e293b; border-color:#334155; color:#e2e8f0; }
-[data-theme="dark"] .profile-chart-card h3,
-[data-theme="dark"] .stat-cell .font-extrabold { color:#e2e8f0; }
 [data-theme="dark"] .lb-profile-inner { background:#0f172a; border-color:#334155; }
-[data-theme="dark"] .ct-panel-inner { background:#0f172a; border-color:#334155; }
-[data-theme="dark"] .ct-stat { background:#1e293b; border-color:#334155; color:#e2e8f0; }
-[data-theme="dark"] .champ-team.is-open { background:#064e3b; border-color:#10b981; }
+[data-theme="dark"] .ct-modal-card { background:#1e293b; }
+[data-theme="dark"] .ct-stat { background:#0f172a; border-color:#334155; color:#e2e8f0; }
+/* make the dark-text utility classes readable on the dark panels (specificity beats Tailwind) */
+[data-theme="dark"] .lb-profile-inner .text-slate-800, [data-theme="dark"] .lb-profile-inner .text-slate-700,
+[data-theme="dark"] .lb-profile-inner h3,
+[data-theme="dark"] .ct-modal-card .text-slate-800, [data-theme="dark"] .ct-modal-card .text-slate-700,
+[data-theme="dark"] .ct-modal-card h3 { color:#e2e8f0; }
+[data-theme="dark"] .lb-profile-inner .text-slate-600, [data-theme="dark"] .lb-profile-inner .text-slate-500,
+[data-theme="dark"] .ct-modal-card .text-slate-600, [data-theme="dark"] .ct-modal-card .text-slate-500 { color:#94a3b8; }
