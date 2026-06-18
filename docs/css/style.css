@@ -584,11 +584,9 @@ img.emoji {
 [data-theme="dark"] .lstat-bar { background:#334155; }
 [data-theme="dark"] .lstat-mid { color:#94a3b8; }
 
-/* ── Player profile modal (leaderboard click-through) ── */
+/* ── Player profile (leaderboard click-through) ── */
 .stat-cell { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:8px 4px; }
 .profile-chart-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px; }
-.dark .stat-cell, .dark .profile-chart-card { background:#1e293b; border-color:#334155; }
-.dark .profile-chart-card h3, .dark .stat-cell .font-extrabold { color:#e2e8f0; }
 
 /* inline expand (accordion) under a leaderboard row */
 .lb-entry { display:flex; flex-direction:column; }
@@ -598,4 +596,24 @@ img.emoji {
 .lb-profile-inner { padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-top:0;
   border-radius:0 0 12px 12px; margin:-4px 4px 6px; animation: lbSlideDown .18s ease-out; }
 @keyframes lbSlideDown { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform:none; } }
-.dark .lb-profile-inner { background:#0f172a; border-color:#334155; }
+
+/* ── Champion page: click team → inline stats panel ── */
+.champ-chevron { transition: transform .18s ease; display:inline-block; }
+.champ-team.is-open { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.champ-team.is-open .champ-chevron { transform: rotate(180deg); }
+.ct-panel { overflow:hidden; }
+.ct-panel-inner { padding:12px; background:#f0fdf4; border:1px solid #6ee7b7; border-top:0;
+  border-radius:0 0 12px 12px; margin:-2px 2px 8px; animation: lbSlideDown .18s ease-out; }
+.ct-stat { background:#fff; border:1px solid #d1fae5; border-radius:10px; padding:6px 8px; }
+.ct-frm { display:inline-flex; width:1.25rem; height:1.25rem; align-items:center; justify-content:center;
+  border-radius:5px; font-size:.7rem; font-weight:700; color:#fff; }
+
+/* ── Dark mode for both panels (game uses html[data-theme="dark"], NOT .dark) ── */
+[data-theme="dark"] .stat-cell,
+[data-theme="dark"] .profile-chart-card { background:#1e293b; border-color:#334155; color:#e2e8f0; }
+[data-theme="dark"] .profile-chart-card h3,
+[data-theme="dark"] .stat-cell .font-extrabold { color:#e2e8f0; }
+[data-theme="dark"] .lb-profile-inner { background:#0f172a; border-color:#334155; }
+[data-theme="dark"] .ct-panel-inner { background:#0f172a; border-color:#334155; }
+[data-theme="dark"] .ct-stat { background:#1e293b; border-color:#334155; color:#e2e8f0; }
+[data-theme="dark"] .champ-team.is-open { background:#064e3b; border-color:#10b981; }

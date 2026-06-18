@@ -1601,6 +1601,7 @@ function renderChampion() {
     return;
   }
   grid.classList.remove('hidden');
+  _killChampCharts(); _openChampEls = null;   // a fresh grid invalidates any open panel
   // Favourites first (shortest odds), so the risk/reward gradient is obvious.
   const om = oddsMap(), base = oddsBase();
   teams.sort((a, b) => championOddsFor(a, om) - championOddsFor(b, om) || a.localeCompare(b));
@@ -1608,22 +1609,160 @@ function renderChampion() {
     const flag = flags[t] || '🏳️';
     const zh = TEAM_ZH[t] || '';
     const sel = (t === myPick) ? 'is-picked' : '';
-    const dis = locked ? 'is-locked' : '';
     const odds = championOddsFor(t, om);
     const pay = championPayout(t, om, base);
     return `
-      <button class="champ-team ${sel} ${dis}" data-team="${escAttr(t)}" ${locked ? 'disabled' : ''}>
-        <span class="champ-flag">${flag}</span>
-        <span class="champ-name"><span class="champ-en">${escHtml(t)}</span>${zh ? `<span class="champ-zh">${escHtml(zh)}</span>` : ''}</span>
-        <span class="champ-odds"><span class="champ-o">@${odds}</span><span class="champ-pay">+${pay}</span></span>
-        ${t === myPick ? '<span class="champ-check">✓</span>' : ''}
-      </button>`;
+      <div class="champ-entry">
+        <button class="champ-team ${sel}" data-team="${escAttr(t)}">
+          <span class="champ-flag">${flag}</span>
+          <span class="champ-name"><span class="champ-en">${escHtml(t)}</span>${zh ? `<span class="champ-zh">${escHtml(zh)}</span>` : ''}</span>
+          <span class="champ-odds"><span class="champ-o">@${odds}</span><span class="champ-pay">+${pay}</span></span>
+          ${t === myPick ? '<span class="champ-check">✓</span>' : ''}
+          <span class="champ-chevron text-slate-400 ml-1">▾</span>
+        </button>
+        <div class="ct-panel" hidden></div>
+      </div>`;
   }).join('');
 
-  if (!locked) {
-    grid.querySelectorAll('.champ-team').forEach(btn => {
-      btn.addEventListener('click', () => pickChampion(btn.dataset.team));
+  // Click a team → expand its stats panel (NOT an instant pick anymore; picking
+  // is a button inside the panel). Works whether or not the pick window is locked.
+  grid.querySelectorAll('.champ-team[data-team]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panel = btn.parentElement.querySelector('.ct-panel');
+      toggleChampionPanel(btn.dataset.team, btn, panel, locked);
     });
+  });
+}
+
+// ── Champion team stats (all from data already loaded client-side) ──
+let _champCharts = [];
+let _openChampEls = null;   // { btn, panel, team }
+function _killChampCharts() { _champCharts.forEach(c => { try { c.destroy(); } catch (e) {} }); _champCharts = []; }
+function _collapseChamp() {
+  _killChampCharts();
+  if (!_openChampEls) return;
+  try { _openChampEls.panel.hidden = true; _openChampEls.panel.innerHTML = ''; _openChampEls.btn.classList.remove('is-open'); } catch (e) {}
+  _openChampEls = null;
+}
+
+const CHAMP_STAGE_ZH = { group: '小組', r32: '32強', r16: '16強', qf: '八強', sf: '四強', '3rd-place': '季軍', final: '決賽' };
+function _champStage(s) { return CHAMP_STAGE_ZH[s] || s || ''; }
+function _shortDate(iso) { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' }); } catch (e) { return ''; } }
+
+function _groupTable(letter) {
+  const ms = Array.from(matchesCache.values()).filter(m => m.stage === 'group' && m.group === letter);
+  const rows = new Map();
+  for (const m of ms) {
+    for (const [nm, fl] of [[m.homeTeam, m.homeFlag], [m.awayTeam, m.awayFlag]]) {
+      if (nm && nm !== 'TBD' && !rows.has(nm)) rows.set(nm, { team: nm, flag: fl, MP: 0, W: 0, D: 0, L: 0, GF: 0, GA: 0, GD: 0, Pts: 0 });
+    }
+  }
+  for (const m of ms) {
+    if (!m.finalScore || m.status !== 'settled') continue;
+    const h = rows.get(m.homeTeam), a = rows.get(m.awayTeam);
+    if (!h || !a) continue;
+    const hg = m.finalScore.home, ag = m.finalScore.away;
+    h.MP++; a.MP++; h.GF += hg; h.GA += ag; a.GF += ag; a.GA += hg;
+    if (hg > ag) { h.W++; h.Pts += 3; a.L++; } else if (hg < ag) { a.W++; a.Pts += 3; h.L++; } else { h.D++; a.D++; h.Pts++; a.Pts++; }
+  }
+  for (const r of rows.values()) r.GD = r.GF - r.GA;
+  return [...rows.values()].sort((x, y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.team.localeCompare(y.team));
+}
+
+function championStats(team) {
+  const om = oddsMap(), base = oddsBase();
+  const odds = championOddsFor(team, om);
+  const pay = championPayout(team, om, base);
+  const implied = odds ? Math.round(100 / odds) : 0;
+  // popularity among players
+  const counts = new Map();
+  championsByUid.forEach(cp => { if (cp && cp.pick) counts.set(cp.pick, (counts.get(cp.pick) || 0) + 1); });
+  const sortedPop = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const myCount = counts.get(team) || 0;
+  const popRank = sortedPop.findIndex(([t]) => t === team) + 1;
+  const topPop = sortedPop.slice(0, 5);
+  // group standing
+  let grp = null;
+  for (const m of matchesCache.values()) { if (m.stage === 'group' && m.group && (m.homeTeam === team || m.awayTeam === team)) { grp = m.group; break; } }
+  let standing = null;
+  if (grp) { const tbl = _groupTable(grp); const i = tbl.findIndex(r => r.team === team); if (i >= 0) standing = { group: grp, pos: i + 1, ...tbl[i] }; }
+  // form (last 5 settled)
+  const played = Array.from(matchesCache.values())
+    .filter(m => m.status === 'settled' && m.finalScore && (m.homeTeam === team || m.awayTeam === team))
+    .sort((a, b) => new Date(a.kickoffISO) - new Date(b.kickoffISO));
+  const form = played.slice(-5).map(m => {
+    const home = m.homeTeam === team, gf = home ? m.finalScore.home : m.finalScore.away, ga = home ? m.finalScore.away : m.finalScore.home;
+    return gf > ga ? 'W' : gf < ga ? 'L' : 'D';
+  });
+  // next fixture
+  const upcoming = Array.from(matchesCache.values())
+    .filter(m => m.status !== 'settled' && m.homeTeam !== 'TBD' && m.awayTeam !== 'TBD' && (m.homeTeam === team || m.awayTeam === team))
+    .sort((a, b) => new Date(a.kickoffISO) - new Date(b.kickoffISO));
+  let next = null;
+  if (upcoming.length) { const m = upcoming[0], home = m.homeTeam === team; next = { opp: home ? m.awayTeam : m.homeTeam, oppFlag: home ? m.awayFlag : m.homeFlag, stage: m.stage, ko: m.kickoffISO }; }
+  return { odds, pay, implied, myCount, popRank, topPop, standing, form, next };
+}
+
+function toggleChampionPanel(team, btn, panel, locked) {
+  if (_openChampEls && _openChampEls.team === team) { _collapseChamp(); return; }
+  _collapseChamp();
+  renderChampionPanel(team, panel, locked);
+  btn.classList.add('is-open');
+  _openChampEls = { btn, panel, team };
+  setTimeout(() => { try { panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 80);
+}
+
+function renderChampionPanel(team, panel, locked) {
+  const s = championStats(team);
+  const flags = teamFlagMap();
+  const isMine = myChampion && myChampion.pick === team;
+  const popLbl = s.myCount ? `揀咗${s.popRank === 1 ? '(最熱)' : ''}` : '仲未有人揀';
+  const stat = (v, cls, l) => `<div class="ct-stat text-center"><div class="text-base font-extrabold ${cls}">${v}</div><div class="text-[10px] text-slate-500">${l}</div></div>`;
+  const st = s.standing;
+  const standingRow = st ? `
+    <div class="ct-stat mb-2 flex items-center justify-between">
+      <div><span class="text-xs font-semibold text-slate-700">小組 Group ${st.group}</span> <span class="text-[11px] text-slate-500">· 第 ${st.pos} · ${st.Pts} 分</span></div>
+      <div class="text-[11px] text-slate-600">P${st.MP} · <span class="text-emerald-600 font-semibold">W${st.W}</span> D${st.D} L${st.L} · 入${st.GF} 失${st.GA}</div>
+    </div>` : '';
+  const formHtml = s.form.length
+    ? s.form.map(f => `<span class="ct-frm" style="background:${f === 'W' ? '#10b981' : f === 'L' ? '#f43f5e' : '#94a3b8'}">${f}</span>`).join('')
+    : '<span class="text-[11px] text-slate-400">未開賽</span>';
+  const nextHtml = s.next
+    ? `下場 🆚 ${s.next.oppFlag || ''} ${escHtml(teamPlainSafe(s.next.opp))} · ${_champStage(s.next.stage)} · ${_shortDate(s.next.ko)}`
+    : '<span class="text-slate-400">冇下場(已出局/待定)</span>';
+  const pickBtn = locked
+    ? `<div class="w-full text-center text-xs text-slate-400 py-2">🔒 預測已截止</div>`
+    : isMine
+      ? `<button class="w-full bg-emerald-100 text-emerald-700 font-semibold py-2.5 rounded-xl champ-pick-btn" data-pick="${escAttr(team)}">✓ 你嘅冠軍(撳其他隊可改)</button>`
+      : `<button class="w-full bg-emerald-600 text-white font-semibold py-2.5 rounded-xl champ-pick-btn" data-pick="${escAttr(team)}">👑 揀佢做我嘅冠軍 · @${s.odds} → +${s.pay}</button>`;
+
+  panel.innerHTML = `<div class="ct-panel-inner">
+    <div class="grid grid-cols-3 gap-2 mb-3">
+      ${stat('@' + s.odds, 'text-emerald-700', '賠率 · 估中 +' + s.pay)}
+      ${stat(s.implied + '%', 'text-slate-800', '隱含機會 implied')}
+      ${stat(s.myCount || '0', 'text-amber-600', popLbl)}
+    </div>
+    ${standingRow}
+    <div class="flex items-center justify-between mb-3 text-xs gap-2">
+      <div class="flex items-center gap-1 shrink-0"><span class="text-slate-500 mr-1">近績</span>${formHtml}</div>
+      <div class="text-slate-600 text-right">${nextHtml}</div>
+    </div>
+    ${s.topPop.length ? `<div class="ct-stat mb-3"><div class="flex items-baseline justify-between mb-1"><span class="text-xs font-semibold text-slate-700">玩家冠軍熱度</span><span class="text-[10px] text-slate-400">邊隊最多人揀</span></div><canvas id="ct-pop" height="${20 + s.topPop.length * 22}"></canvas></div>` : ''}
+    ${pickBtn}
+  </div>`;
+  panel.hidden = false;
+  if (window.twemoji) try { twemoji.parse(panel); } catch (e) {}
+
+  const pb = panel.querySelector('.champ-pick-btn');
+  if (pb) pb.addEventListener('click', () => pickChampion(pb.dataset.pick));
+
+  if (window.Chart && s.topPop.length) {
+    const C = window.Chart;
+    _champCharts.push(new C(panel.querySelector('#ct-pop'), {
+      type: 'bar',
+      data: { labels: s.topPop.map(([t]) => `${flags[t] || ''} ${TEAM_ZH[t] || t}`), datasets: [{ data: s.topPop.map(([, n]) => n), backgroundColor: s.topPop.map(([t]) => t === team ? '#f59e0b' : '#047857'), borderRadius: 3 }] },
+      options: { animation: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 10 }, color: '#94a3b8', stepSize: 1 }, grid: { color: '#f1f5f9' } }, y: { ticks: { font: { size: 11 } }, grid: { display: false } } } },
+    }));
   }
 }
 
