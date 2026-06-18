@@ -1634,6 +1634,27 @@ const WC_TITLES = {
   'France': [2, '1998·2018'], 'Uruguay': [2, '1930·1950'],
   'England': [1, '1966'], 'Spain': [1, '2010'],
 };
+// Curated team trivia (high-confidence facts). nick=綽號, best=史上最佳, last22=上屆.
+const TEAM_META = {
+  'Brazil': { nick: '森巴軍團', best: '冠軍 ×5', last22: '八強出局' },
+  'Argentina': { nick: '探戈軍團', best: '冠軍 ×3', last22: '🏆 冠軍' },
+  'France': { nick: '高盧雄雞', best: '冠軍 ×2', last22: '亞軍' },
+  'Spain': { nick: '鬥牛士軍團', best: '冠軍(2010)', last22: '十六強' },
+  'Germany': { nick: '日耳曼戰車', best: '冠軍 ×4', last22: '小組出局' },
+  'England': { nick: '三獅軍團', best: '冠軍(1966)', last22: '八強' },
+  'Portugal': { best: '季軍(1966)', last22: '八強' },
+  'Netherlands': { nick: '橙衣軍團', best: '三屆亞軍(未奪冠)', last22: '八強' },
+  'Belgium': { nick: '歐洲紅魔', best: '季軍(2018)', last22: '小組出局' },
+  'Croatia': { nick: '格仔軍團', best: '亞軍(2018)', last22: '季軍' },
+  'Uruguay': { nick: '天藍軍團', best: '冠軍 ×2', last22: '小組出局' },
+  'Morocco': { nick: '阿特拉斯雄獅', best: '殿軍(2022)', last22: '殿軍(史上最佳)' },
+  'United States': { best: '季軍(1930)', last22: '十六強' },
+  'Mexico': { nick: '三色軍團', best: '八強', last22: '小組出局' },
+  'Japan': { nick: '藍武士', best: '十六強', last22: '十六強' },
+  'South Korea': { nick: '太極虎', best: '殿軍(2002)', last22: '十六強' },
+  'Switzerland': { best: '八強', last22: '十六強' },
+  'Senegal': { nick: '特蘭加雄獅', best: '八強(2002)', last22: '十六強' },
+};
 const CHAMP_STAGE_ZH = { group: '小組', r32: '32強', r16: '16強', qf: '八強', sf: '四強', '3rd-place': '季軍', final: '決賽' };
 function _champStage(s) { return CHAMP_STAGE_ZH[s] || s || ''; }
 function _shortDate(iso) { try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' }); } catch (e) { return ''; } }
@@ -1665,6 +1686,12 @@ function championStats(team) {
   const implied = odds ? Math.round(100 / odds) : 0;
   const wc = WC_TITLES[team];
   const titles = wc ? wc[0] : 0, titleYears = wc ? wc[1] : '';
+  const meta = TEAM_META[team] || {};
+  // pre-tournament favourite rank by outright odds
+  let universe = Object.keys(teamFlagMap());
+  if (universe.length < 24) universe = Object.keys(TEAM_ZH).filter(t => t !== 'TBD');
+  const ranked = [...new Set(universe)].sort((a, b) => championOddsFor(a, om) - championOddsFor(b, om));
+  const favRank = ranked.indexOf(team) + 1, favTotal = ranked.length;
   // group standing
   let grp = null;
   for (const m of matchesCache.values()) { if (m.stage === 'group' && m.group && (m.homeTeam === team || m.awayTeam === team)) { grp = m.group; break; } }
@@ -1684,7 +1711,7 @@ function championStats(team) {
     .sort((a, b) => new Date(a.kickoffISO) - new Date(b.kickoffISO));
   let next = null;
   if (upcoming.length) { const m = upcoming[0], home = m.homeTeam === team; next = { opp: home ? m.awayTeam : m.homeTeam, oppFlag: home ? m.awayFlag : m.homeFlag, stage: m.stage, ko: m.kickoffISO }; }
-  return { odds, pay, implied, titles, titleYears, standing, form, next };
+  return { odds, pay, implied, titles, titleYears, meta, favRank, favTotal, standing, form, next };
 }
 
 let _champEscWired = false;
@@ -1716,6 +1743,15 @@ function openChampionModal(team, locked) {
   const titleLine = s.titles
     ? `<div class="ct-stat text-center text-xs text-slate-600">🏆 ${s.titles} 次世界盃冠軍 · <span class="text-slate-500">${s.titleYears}</span></div>`
     : `<div class="ct-stat text-center text-xs text-slate-500">🏆 未贏過世界盃</div>`;
+  const trivia = [
+    s.meta.nick ? `🏷️ 綽號:${s.meta.nick}` : '',
+    s.favRank ? `📈 賽前第 ${s.favRank} 大熱門 · 共 ${s.favTotal} 隊` : '',
+    s.meta.best ? `📜 世界盃史上最佳:${escHtml(s.meta.best)}` : '',
+    s.meta.last22 ? `⏮️ 上屆 2022:${escHtml(s.meta.last22)}` : '',
+  ].filter(Boolean);
+  const triviaBlock = trivia.length
+    ? `<div class="ct-stat text-[11px] text-slate-600" style="line-height:1.5">${trivia.map(x => `<div>${x}</div>`).join('')}</div>`
+    : '';
   const formHtml = s.form.length
     ? s.form.map(f => `<span class="ct-frm" style="background:${f === 'W' ? '#10b981' : f === 'L' ? '#f43f5e' : '#94a3b8'}">${f}</span>`).join('')
     : '<span class="text-[11px] text-slate-400">未開賽</span>';
@@ -1749,6 +1785,7 @@ function openChampionModal(team, locked) {
           ${stat('🏆 ' + s.titles, 'text-amber-600', '世界盃冠軍')}
         </div>
         ${titleLine}
+        ${triviaBlock}
         ${standingRow}
         <div class="flex items-center justify-between text-xs gap-2">
           <div class="flex items-center gap-1 shrink-0"><span class="text-slate-500 mr-1">近績</span>${formHtml}</div>
