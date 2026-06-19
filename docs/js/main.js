@@ -142,11 +142,17 @@ onAuthStateChanged(auth, async (user) => {
       joinedAt: serverTimestamp(),
     });
   }
-  // Live-listen to own user doc → balance
+  // Live-listen to own user doc → show BOTH total (asset = cash + locked stakes)
+  // and cash, since showing cash alone is misleading when points are tied up in
+  // open bets (you'd look poorer than you are).
   onSnapshot(userRef, snap => {
     currentUserDoc = snap.data();
     if (currentUserDoc) {
-      $('user-balance').textContent = `${currentUserDoc.balance} pts`;
+      const cash = currentUserDoc.balance || 0;
+      const asset = cash + (currentUserDoc.openStake || 0);
+      $('user-balance').innerHTML =
+        `${asset.toLocaleString()} <span class="font-normal opacity-80">總分</span> · ` +
+        `${cash.toLocaleString()} <span class="font-normal opacity-80">現金</span>`;
     }
   });
 
