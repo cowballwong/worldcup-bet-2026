@@ -12,7 +12,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="css/style.css?v=20260618c">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=20260619b">
 <script>
   // Apply persisted theme before first paint to avoid FOUC
   (function() {
@@ -62,30 +64,16 @@
 <!-- Main app -->
 <main id="app-view" class="max-w-4xl mx-auto px-4 py-6 hidden">
 
-  <!-- Tabs -->
-  <div id="tabbar" class="flex border-b border-slate-200 mb-4 overflow-x-auto">
-    <button class="tab-btn px-3 py-2 font-medium text-emerald-700 border-b-2 border-emerald-700 whitespace-nowrap text-center" data-tab="matches">
-      <span class="block text-sm">⚽️ Matches</span><span class="block text-xs opacity-70">賽程</span>
-    </button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="champion">
-      <span class="block text-sm">👑 Champion</span><span class="block text-xs opacity-70">估冠軍</span>
-    </button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="standings">
-      <span class="block text-sm">📊 Standings</span><span class="block text-xs opacity-70">積分</span>
-    </button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="bracket">
-      <span class="block text-sm">🏟️ Knockout</span><span class="block text-xs opacity-70">淘汰賽</span>
-    </button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="leaderboard">
-      <span class="block text-sm">🏆 Leaderboard</span><span class="block text-xs opacity-70">排行榜</span>
-    </button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="mybets">
-      <span class="block text-sm">🎟️ My Bets</span><span class="block text-xs opacity-70">我的注</span>
-    </button>
-    <button class="tab-btn px-3 py-2 font-medium text-slate-500 border-b-2 border-transparent whitespace-nowrap text-center" data-tab="ai">
-      <span class="block text-sm">🤖 LillyRose</span><span class="block text-xs opacity-70">AI 估</span>
-    </button>
-  </div>
+  <!-- Tabs → bottom nav bar (styled in CSS; active state driven by text-emerald-700 utility toggled in JS) -->
+  <nav id="tabbar" class="flex">
+    <button class="tab-btn text-emerald-700 border-emerald-700" data-tab="matches"><span class="tab-ico">⚽️</span><span class="tab-lbl">賽程</span></button>
+    <button class="tab-btn text-slate-500 border-transparent" data-tab="champion"><span class="tab-ico">👑</span><span class="tab-lbl">冠軍</span></button>
+    <button class="tab-btn text-slate-500 border-transparent" data-tab="standings"><span class="tab-ico">📊</span><span class="tab-lbl">積分</span></button>
+    <button class="tab-btn text-slate-500 border-transparent" data-tab="bracket"><span class="tab-ico">🏟️</span><span class="tab-lbl">淘汰</span></button>
+    <button class="tab-btn text-slate-500 border-transparent" data-tab="leaderboard"><span class="tab-ico">🏆</span><span class="tab-lbl">排名</span></button>
+    <button class="tab-btn text-slate-500 border-transparent" data-tab="mybets"><span class="tab-ico">🎟️</span><span class="tab-lbl">我注</span></button>
+    <button class="tab-btn text-slate-500 border-transparent" data-tab="ai"><span class="tab-ico">🤖</span><span class="tab-lbl">AI</span></button>
+  </nav>
 
   <!-- Matches tab -->
   <section id="tab-matches" class="tab-panel">
@@ -94,7 +82,7 @@
       <span class="text-xs text-slate-500" id="match-count">—</span>
     </div>
     <div id="match-list" class="space-y-3">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
@@ -107,7 +95,7 @@
     <p class="text-xs text-slate-500 mb-3">免落注 · 估中今屆冠軍,派彩 = <b>100 分 × 該隊賠率</b>(用你揀嗰刻鎖定)。熱門賺得少、冷門賺到開巷。每人揀一隊,開賽前可隨時改;第一場波開波後鎖定。<br><span class="opacity-70">No stake. Correct pick pays 100 × the team's locked outright odds — back a long-shot for a bigger reward. Editable until the first kick-off.</span></p>
     <div id="champion-status" class="mb-3"></div>
     <div id="champion-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
@@ -116,7 +104,7 @@
     <h2 class="font-semibold leading-tight mb-2">Group standings<br><span class="text-xs text-slate-500 font-normal">小組積分榜</span></h2>
     <p class="text-xs text-slate-500 mb-2">Auto-computed from settled matches. Top 2 highlighted (advance to R32). Tiebreaker: Pts → GD → GF.</p>
     <div id="standings-list" class="space-y-2">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
@@ -125,7 +113,7 @@
     <h2 class="font-semibold leading-tight mb-2">Knockout bracket<br><span class="text-xs text-slate-500 font-normal">淘汰賽</span></h2>
     <p class="text-xs text-slate-500 mb-2">Slot labels (1A, 2B, 3A/D/E/F etc) get replaced with actual teams by admin once groups conclude.</p>
     <div id="bracket-list" class="space-y-2">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
@@ -134,7 +122,7 @@
     <h2 class="font-semibold leading-tight mb-2">Leaderboard<br><span class="text-xs text-slate-500 font-normal">排行榜</span></h2>
     <p class="text-xs text-slate-500 mb-2 leading-snug">排名按 <b>實分</b> = 現金 + 鎖喺未完場注嘅本金（落咗注但場波未開估／未完,本金當你仲擁有,只計已完場輸贏）。<b>現金</b> = 而家實際剩低、可再落注嘅分。</p>
     <div id="leaderboard-list" class="space-y-2">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
@@ -143,7 +131,7 @@
     <h2 class="font-semibold leading-tight mb-1">🤖 LillyRose AI picks<br><span class="text-xs text-slate-500 font-normal">LillyRose 嘅估波</span></h2>
     <p class="text-xs text-slate-500 mb-3">An AI player. Picks the 1X2 favourite ~12 hours before kickoff. Everyone can see her bets. She's part of the leaderboard.</p>
     <div id="ai-bets-list" class="space-y-2">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
@@ -151,7 +139,7 @@
   <section id="tab-mybets" class="tab-panel hidden">
     <h2 class="font-semibold leading-tight mb-2">Your bets<br><span class="text-xs text-slate-500 font-normal">你嘅注單</span></h2>
     <div id="mybets-list" class="space-y-2">
-      <p class="text-slate-500 text-sm">Loading…</p>
+      <div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div>
     </div>
   </section>
 
