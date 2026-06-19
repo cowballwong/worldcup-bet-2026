@@ -710,3 +710,31 @@ footer { padding-bottom: calc(82px + env(safe-area-inset-bottom, 0)) !important;
 @keyframes toastpop { from { transform:translate(-50%,16px); opacity:0; } to { transform:translate(-50%,0); opacity:1; } }
 #toast.toast-win { background:linear-gradient(135deg,#047857,#10b981); font-weight:700; box-shadow:0 8px 24px rgba(16,185,129,.4); }
 #toast.toast-err { background:linear-gradient(135deg,#9f1239,#f43f5e); }
+
+/* ═══════════ Batch C — "Today" home hero + PWA install ═══════════ */
+.today-hero-card { background:linear-gradient(135deg,#ecfdf5,#ffffff); border:1px solid #d1fae5;
+  border-radius:16px; padding:14px; box-shadow:0 2px 10px rgba(15,23,42,.05); }
+.th-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px; }
+.th-greet { font-weight:700; font-family:'Outfit',ui-sans-serif,sans-serif; color:#0f172a; }
+.th-rank { font-size:14px; color:#334155; white-space:nowrap; }
+.th-rank b { font-size:20px; font-family:'Outfit',sans-serif; }
+.th-install { background:#047857; color:#fff; font-size:11px; font-weight:700; padding:4px 9px; border:0; border-radius:9px; }
+.th-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+.th-stats > div { background:rgba(255,255,255,.72); border:1px solid #d1fae5; border-radius:10px; padding:6px 4px; }
+.th-num { font-size:18px; font-weight:800; font-family:'Outfit',sans-serif; color:#047857; line-height:1.1; }
+.th-lbl { font-size:10px; color:#64748b; }
+.th-live { font-size:12px; color:#dc2626; font-weight:600; margin-top:10px; display:flex; align-items:center; gap:6px; }
+.th-livedot { width:8px; height:8px; border-radius:50%; background:#ef4444; animation:livepulse 1.2s infinite; flex:none; }
+.th-next { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  background:#047857; color:#fff; border:0; border-radius:12px; padding:10px 12px; text-align:left; margin-top:10px; }
+.th-next-l { min-width:0; }
+.th-next-teams { display:block; font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.th-next-cd { display:block; font-size:11px; opacity:.85; margin-top:2px; }
+.th-next-cta { background:#fbbf24; color:#7c2d12; font-weight:700; font-size:12px; padding:6px 10px; border-radius:9px; white-space:nowrap; flex:none; }
+.th-next-cta.done { background:rgba(255,255,255,.22); color:#fff; }
+[data-theme="dark"] .today-hero-card { background:linear-gradient(135deg,#0f3b36,#1e293b); border-color:#334155; }
+[data-theme="dark"] .th-greet { color:#e2e8f0; }
+[data-theme="dark"] .th-rank { color:#cbd5e1; }
+[data-theme="dark"] .th-stats > div { background:rgba(15,23,42,.5); border-color:#334155; }
+[data-theme="dark"] .th-num { color:#34d399; }
+[data-theme="dark"] .th-lbl { color:#94a3b8; }

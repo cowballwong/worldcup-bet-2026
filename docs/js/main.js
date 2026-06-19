@@ -154,6 +154,7 @@ onAuthStateChanged(auth, async (user) => {
       $('user-balance').innerHTML =
         `<span class="block leading-tight">${asset.toLocaleString()}<span class="font-normal opacity-70 text-[10px] ml-1">總分</span></span>` +
         `<span class="block leading-tight text-emerald-200 text-[11px]">${cash.toLocaleString()}<span class="font-normal opacity-70 text-[10px] ml-1">現金</span></span>`;
+      try { renderTodayHero(); } catch (e) {}
     }
   });
 
@@ -438,6 +439,88 @@ if (!window.__wcLiveTicker) {
   }, 15000);
 }
 
+// ── Batch C: "Today" home hero (top of the Matches tab) ──
+let _deferredInstall = null;
+function _fmtCountdown(ms) {
+  if (ms <= 0) return '即將開賽';
+  const mins = Math.floor(ms / 60000), h = Math.floor(mins / 60), d = Math.floor(h / 24);
+  if (d >= 1) return `開賽前 ${d} 日 ${h % 24} 時`;
+  if (h >= 1) return `開賽前 ${h} 時 ${mins % 60} 分`;
+  return `開賽前 ${mins} 分`;
+}
+function renderTodayHero() {
+  const el = document.getElementById('today-hero');
+  if (!el || !currentUser) return;
+  const flags = teamFlagMap();
+  const myIdx = leaderboardRows.findIndex(r => r.uid === currentUser.uid);
+  const rank = myIdx >= 0 ? myIdx + 1 : null, total = leaderboardRows.length;
+  const cash = currentUserDoc?.balance ?? 0;
+  const asset = cash + (currentUserDoc?.openStake ?? 0);
+  const all = Array.from(matchesCache.values());
+  const live = all.filter(m => m.status === 'live' || (m.status !== 'settled' && isPastKickoff(m)));
+  const next = all.filter(m => m.status !== 'settled' && !isPastKickoff(m) && m.homeTeam !== 'TBD' && m.awayTeam !== 'TBD')
+    .sort((a, b) => new Date(a.kickoffISO) - new Date(b.kickoffISO))[0] || null;
+  let openCount = 0; myBetsByMatch.forEach(arr => arr.forEach(b => { if (b.status === 'open') openCount++; }));
+  const name = (currentUserDoc?.displayName || '').trim().split(' ')[0] || '';
+  const rankCls = rank === 1 ? 'text-amber-500' : 'text-emerald-700';
+
+  let liveHtml = '';
+  if (live.length) {
+    const m = live[0], sc = m.liveScore ? `${m.liveScore.home}-${m.liveScore.away}` : '';
+    liveHtml = `<div class="th-live"><span class="th-livedot"></span> Live 緊 ${live.length} 場 · ${flags[m.homeTeam] || ''} ${sc} ${flags[m.awayTeam] || ''}${live.length > 1 ? ` +${live.length - 1}` : ''}</div>`;
+  }
+  let nextHtml = '';
+  if (next) {
+    const bet = myBetsByMatch.has(next.id);
+    const cd = _fmtCountdown(new Date(next.kickoffISO).getTime() - Date.now());
+    nextHtml = `<button class="th-next" data-mid="${next.id}">
+      <span class="th-next-l"><span class="th-next-teams">${flags[next.homeTeam] || '🏳️'} ${escHtml(next.homeTeam)} <span class="opacity-50">vs</span> ${escHtml(next.awayTeam)} ${flags[next.awayTeam] || '🏳️'}</span><span class="th-next-cd">⏱ ${cd}</span></span>
+      <span class="th-next-cta ${bet ? 'done' : ''}">${bet ? '✓ 已落注' : '落注 →'}</span>
+    </button>`;
+  }
+  const installChip = _deferredInstall ? `<button id="th-install" class="th-install">📲 安裝</button>` : '';
+
+  el.innerHTML = `
+    <div class="today-hero-card">
+      <div class="th-top">
+        <div class="th-greet">👋 ${name ? escHtml(name) + ' ' : ''}你好</div>
+        <div class="flex items-center gap-2">
+          ${installChip}
+          ${rank ? `<div class="th-rank">排第 <b class="${rankCls}">${rank}</b><span class="opacity-60"> / ${total}</span></div>` : ''}
+        </div>
+      </div>
+      <div class="th-stats">
+        <div><div class="th-num">${asset.toLocaleString()}</div><div class="th-lbl">總分</div></div>
+        <div><div class="th-num">${cash.toLocaleString()}</div><div class="th-lbl">現金</div></div>
+        <div><div class="th-num">${openCount}</div><div class="th-lbl">未開注</div></div>
+      </div>
+      ${liveHtml}${nextHtml}
+    </div>`;
+  if (window.twemoji) try { twemoji.parse(el); } catch (e) {}
+
+  const nb = el.querySelector('.th-next');
+  if (nb) nb.addEventListener('click', () => {
+    const mid = nb.dataset.mid;
+    if (myBetsByMatch.has(mid)) {
+      const card = document.querySelector(`#match-list .match-card[data-match-id="${mid}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else { openBetModal(mid); }
+  });
+  const ib = el.querySelector('#th-install');
+  if (ib) ib.addEventListener('click', async () => {
+    if (!_deferredInstall) return;
+    _deferredInstall.prompt();
+    try { await _deferredInstall.userChoice; } catch (e) {}
+    _deferredInstall = null; renderTodayHero();
+  });
+}
+// keep the countdown fresh
+setInterval(() => { try { renderTodayHero(); } catch (e) {} }, 60000);
+// PWA: capture the install prompt + register a NO-CACHE service worker (enables
+// "add to home screen" without ever serving stale content — safe for fast updates).
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _deferredInstall = e; renderTodayHero(); });
+if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} }
+
 function renderMatches(matches) {
   // Player view only shows group-stage + scheduled knockout matches with kickoff
   // ahead. Knockout slot labels handled by formatTeam().
@@ -517,6 +600,7 @@ function renderMatches(matches) {
   // So debounce: only scroll ~400ms after the last re-render, on the settled DOM.
   // Skip when the next match is the first card (nothing finished sits above it).
   maybeScrollToNext(nextId, matches);
+  renderTodayHero();
 
   root.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -879,6 +963,7 @@ function subscribeLeaderboard() {
     rows.sort((a, b) => b.asset - a.asset);
     leaderboardRows = rows;
     renderLeaderboard(rows);
+    renderTodayHero();
   });
 }
 
