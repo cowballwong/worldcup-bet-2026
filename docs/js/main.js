@@ -258,6 +258,10 @@ function renderAIBets(bets) {
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
+    // leaving the leaderboard → snapshot current ranks so the ↑↓ arrows next time
+    // reflect movement since this visit.
+    const lbVisible = !document.getElementById('tab-leaderboard').classList.contains('hidden');
+    if (tab !== 'leaderboard' && lbVisible && typeof saveRankBaseline === 'function') saveRankBaseline();
     try { localStorage.setItem('wc-tab', tab); } catch (e) {}  // remember across refresh
     document.querySelectorAll('.tab-btn').forEach(b => {
       const active = b.dataset.tab === tab;
@@ -878,6 +882,68 @@ function subscribeLeaderboard() {
   });
 }
 
+// ── Batch B: podium · rank arrows · celebrations ──
+let _rankBaseline = {};
+try { _rankBaseline = JSON.parse(localStorage.getItem('wc-rank-baseline') || '{}'); } catch (e) {}
+let _lastRanks = {};   // uid → rank from the latest leaderboard render
+
+function _rankArrow(uid, rank) {
+  const prev = _rankBaseline[uid];
+  if (prev == null) return '<span class="lb-arrow new" title="新上榜">✦</span>';
+  if (rank < prev) return `<span class="lb-arrow up">▲${prev - rank}</span>`;
+  if (rank > prev) return `<span class="lb-arrow down">▼${rank - prev}</span>`;
+  return '<span class="lb-arrow same">–</span>';
+}
+function saveRankBaseline() {   // called when the user leaves the leaderboard tab
+  _rankBaseline = { ..._lastRanks };
+  try { localStorage.setItem('wc-rank-baseline', JSON.stringify(_rankBaseline)); } catch (e) {}
+}
+
+function _podiumHtml(top3) {
+  if (top3.length < 3) return '';
+  const order = [top3[1], top3[0], top3[2]];   // 2nd · 1st(centre) · 3rd
+  const place = [2, 1, 3], medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  return '<div class="lb-podium">' + order.map((r, i) => {
+    const p = place[i], isMe = currentUser && r.uid === currentUser.uid;
+    return `<div class="pod pod-${p} ${isMe ? 'is-me' : ''}">
+        <div class="pod-medal">${medal[p]}</div>
+        ${_avatarHtml(r, p === 1 ? 'w-14 h-14 text-lg' : 'w-11 h-11 text-base')}
+        <div class="pod-name">${escHtml(r.displayName)}</div>
+        <div class="pod-score">${(r.asset || 0).toLocaleString()}<span class="opacity-60 text-[10px]"> 分</span></div>
+        <div class="pod-step">${p}</div>
+      </div>`;
+  }).join('') + '</div>';
+}
+
+function celebrate() {
+  if (!window.confetti) return;
+  const C = ['#047857', '#10b981', '#f59e0b', '#fbbf24', '#ffffff'];
+  const fire = (ratio, opts) => confetti({ origin: { y: 0.7 }, zIndex: 9999, colors: C, particleCount: Math.floor(180 * ratio), ...opts });
+  fire(0.25, { spread: 26, startVelocity: 55 });
+  fire(0.2, { spread: 60 });
+  fire(0.35, { spread: 100, decay: 0.91, scalar: 0.9 });
+  fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+  fire(0.1, { spread: 120, startVelocity: 45 });
+}
+
+// Celebrate when one of MY bets newly flips to "won". On the first snapshot we just
+// record the baseline (no party on page load); only later transitions celebrate.
+let _wonSeen = null;
+function _checkFreshWins(bets) {
+  const wonIds = bets.filter(b => b.status === 'won').map(b => b.id);
+  if (_wonSeen === null) { _wonSeen = new Set(wonIds); return; }
+  const fresh = wonIds.filter(id => !_wonSeen.has(id));
+  if (fresh.length) {
+    const gain = fresh.reduce((s, id) => {
+      const b = bets.find(x => x.id === id);
+      return s + ((b.payout ?? Math.round(b.stake * b.odds)) - b.stake);
+    }, 0);
+    celebrate();
+    toast(`🎉 估中 ${fresh.length} 注!+${gain} 分`, 'win');
+  }
+  fresh.forEach(id => _wonSeen.add(id));
+}
+
 function renderLeaderboard(rows) {
   const root = $('leaderboard-list');
   if (rows.length === 0) {
@@ -911,6 +977,7 @@ function renderLeaderboard(rows) {
       <div class="lb-entry">
         <div class="leaderboard-row cursor-pointer ${isMe ? 'is-me' : ''} ${medal === null ? 'is-idle' : ''}" data-uid="${r.uid}" data-rank="${rankNum || ''}">
           <span class="rank-medal">${medal === null ? '·' : medal}</span>
+          ${rankNum ? _rankArrow(r.uid, rankNum) : ''}
           ${_avatarHtml(r, 'w-7 h-7 text-xs')}
           <span class="flex-1 min-w-0">
             <span class="lb-name truncate">${r.displayName} ${isMe ? '<span class="text-xs text-emerald-700">(you)</span>' : ''}</span>
@@ -928,9 +995,11 @@ function renderLeaderboard(rows) {
 
   // Competition (1224) ranking among ACTIVE players, by asset value.
   let rank = 0, prevAsset = null;
+  _lastRanks = {};
   const activeHtml = active.map((r, i) => {
     if (r.asset !== prevAsset) rank = i + 1;
     prevAsset = r.asset;
+    _lastRanks[r.uid] = rank;
     return rowHtml(r, medals[rank - 1] || rank, rank);
   }).join('');
 
@@ -939,7 +1008,8 @@ function renderLeaderboard(rows) {
       + idle.map(r => rowHtml(r, null, null)).join('')
     : '';
 
-  root.innerHTML = activeHtml + idleHtml || '<p class="text-slate-500 text-sm">No players yet.</p>';
+  const podiumHtml = _podiumHtml(active.slice(0, 3));
+  root.innerHTML = podiumHtml + activeHtml + idleHtml || '<p class="text-slate-500 text-sm">No players yet.</p>';
 
   // Click a player → expand their stats panel inline (accordion).
   root.querySelectorAll('.leaderboard-row[data-uid]').forEach(el => {
@@ -1168,6 +1238,7 @@ function subscribeMyBets() {
     }
     renderMyBets(bets);
     if (matchesCache.size) renderMatches(Array.from(matchesCache.values()));
+    _checkFreshWins(bets);
   }, err => {
     console.error('subscribeMyBets error:', err);
     document.getElementById('mybets-list').innerHTML =
@@ -1841,9 +1912,13 @@ function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt
 function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
 
 // ── Toast ──────────────────────────────────────────────────────
-function toast(msg) {
+function toast(msg, type) {
   const t = $('toast');
   t.textContent = msg;
+  t.classList.remove('toast-win', 'toast-err');
+  if (type === 'win') t.classList.add('toast-win');
+  else if (type === 'err') t.classList.add('toast-err');
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), type === 'win' ? 4200 : 2500);
 }
