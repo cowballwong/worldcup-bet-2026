@@ -150,9 +150,10 @@ onAuthStateChanged(auth, async (user) => {
     if (currentUserDoc) {
       const cash = currentUserDoc.balance || 0;
       const asset = cash + (currentUserDoc.openStake || 0);
+      // compact 2-line pill so the header never overflows on a phone
       $('user-balance').innerHTML =
-        `${asset.toLocaleString()} <span class="font-normal opacity-80">總分</span> · ` +
-        `${cash.toLocaleString()} <span class="font-normal opacity-80">現金</span>`;
+        `<span class="block leading-tight">${asset.toLocaleString()}<span class="font-normal opacity-70 text-[10px] ml-1">總分</span></span>` +
+        `<span class="block leading-tight text-emerald-200 text-[11px]">${cash.toLocaleString()}<span class="font-normal opacity-70 text-[10px] ml-1">現金</span></span>`;
     }
   });
 
