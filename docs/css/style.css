@@ -738,3 +738,9 @@ footer { padding-bottom: calc(82px + env(safe-area-inset-bottom, 0)) !important;
 [data-theme="dark"] .th-stats > div { background:rgba(15,23,42,.5); border-color:#334155; }
 [data-theme="dark"] .th-num { color:#34d399; }
 [data-theme="dark"] .th-lbl { color:#94a3b8; }
+
+/* ── HOTFIX: pin the bottom nav to a fixed height so it can never stretch to
+   full-height and cover the content (seen on a real device: top resolved to the
+   header offset + bottom:0 → 847px tall). top:auto !important kills any stray top. ── */
+#tabbar { top: auto !important; height: 58px !important; }
+.tab-btn { justify-content: center; }
