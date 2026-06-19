@@ -273,13 +273,15 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     $(`tab-${tab}`).classList.remove('hidden');
-    // Every time the Matches tab is opened, jump to the current/latest match.
+    // Matches tab → jump to the current/latest match; every other tab → top.
     if (tab === 'matches') {
       setTimeout(() => {
         const nx = document.querySelector('#match-list .match-card.is-next')
                 || document.querySelector('#match-list .match-card:not(.is-settled)');
         if (nx) { try { nx.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
       }, 60);
+    } else {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
     }
   });
 });
