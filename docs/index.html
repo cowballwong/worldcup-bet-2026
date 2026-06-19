@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260619d">
+<link rel="stylesheet" href="css/style.css?v=20260619e">
 <script>
   // Apply persisted theme before first paint to avoid FOUC
   (function() {
@@ -64,17 +64,6 @@
 
 <!-- Main app -->
 <main id="app-view" class="max-w-4xl mx-auto px-4 py-6 hidden">
-
-  <!-- Tabs → bottom nav bar (styled in CSS; active state driven by text-emerald-700 utility toggled in JS) -->
-  <nav id="tabbar" class="flex">
-    <button class="tab-btn text-emerald-700 border-emerald-700" data-tab="matches"><span class="tab-ico">⚽️</span><span class="tab-lbl">賽程</span></button>
-    <button class="tab-btn text-slate-500 border-transparent" data-tab="champion"><span class="tab-ico">👑</span><span class="tab-lbl">冠軍</span></button>
-    <button class="tab-btn text-slate-500 border-transparent" data-tab="standings"><span class="tab-ico">📊</span><span class="tab-lbl">積分</span></button>
-    <button class="tab-btn text-slate-500 border-transparent" data-tab="bracket"><span class="tab-ico">🏟️</span><span class="tab-lbl">淘汰</span></button>
-    <button class="tab-btn text-slate-500 border-transparent" data-tab="leaderboard"><span class="tab-ico">🏆</span><span class="tab-lbl">排名</span></button>
-    <button class="tab-btn text-slate-500 border-transparent" data-tab="mybets"><span class="tab-ico">🎟️</span><span class="tab-lbl">我注</span></button>
-    <button class="tab-btn text-slate-500 border-transparent" data-tab="ai"><span class="tab-ico">🤖</span><span class="tab-lbl">AI</span></button>
-  </nav>
 
   <!-- Matches tab -->
   <section id="tab-matches" class="tab-panel">
@@ -147,6 +136,18 @@
 
 </main>
 
+<!-- Bottom nav — a DIRECT child of <body> so no ancestor (transform/filter/SW) can
+     contain the position:fixed. Visibility is driven by CSS off #app-view's .hidden. -->
+<nav id="tabbar" class="flex">
+  <button class="tab-btn text-emerald-700 border-emerald-700" data-tab="matches"><span class="tab-ico">⚽️</span><span class="tab-lbl">賽程</span></button>
+  <button class="tab-btn text-slate-500 border-transparent" data-tab="champion"><span class="tab-ico">👑</span><span class="tab-lbl">冠軍</span></button>
+  <button class="tab-btn text-slate-500 border-transparent" data-tab="standings"><span class="tab-ico">📊</span><span class="tab-lbl">積分</span></button>
+  <button class="tab-btn text-slate-500 border-transparent" data-tab="bracket"><span class="tab-ico">🏟️</span><span class="tab-lbl">淘汰</span></button>
+  <button class="tab-btn text-slate-500 border-transparent" data-tab="leaderboard"><span class="tab-ico">🏆</span><span class="tab-lbl">排名</span></button>
+  <button class="tab-btn text-slate-500 border-transparent" data-tab="mybets"><span class="tab-ico">🎟️</span><span class="tab-lbl">我注</span></button>
+  <button class="tab-btn text-slate-500 border-transparent" data-tab="ai"><span class="tab-ico">🤖</span><span class="tab-lbl">AI</span></button>
+</nav>
+
 <!-- Bet modal -->
 <div id="bet-modal" class="fixed inset-0 bg-black/50 z-20 hidden items-center justify-center p-4">
   <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -198,6 +199,6 @@
   <a id="admin-link" href="admin.html" class="text-emerald-700 hidden">Admin</a>
 </footer>
 
-<script type="module" src="js/main.js?v=20260619d"></script>
+<script type="module" src="js/main.js?v=20260619e"></script>
 </body>
 </html>

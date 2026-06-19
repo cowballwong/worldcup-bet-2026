@@ -518,8 +518,11 @@ function renderTodayHero() {
 setInterval(() => { try { renderTodayHero(); } catch (e) {} }, 60000);
 // PWA: capture the install prompt + register a NO-CACHE service worker (enables
 // "add to home screen" without ever serving stale content — safe for fast updates).
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _deferredInstall = e; renderTodayHero(); });
-if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} }
+// PWA install paused while we stabilise the layout. ACTIVELY UNREGISTER any
+// previously-installed service worker so a stale SW can't interfere with updates.
+if ('serviceWorker' in navigator) {
+  try { navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {}); } catch (e) {}
+}
 
 function renderMatches(matches) {
   // Player view only shows group-stage + scheduled knockout matches with kickoff
