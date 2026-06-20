@@ -58,6 +58,44 @@ img.emoji {
 .match-row .vs.live { color: #dc2626; }
 .match-row .vs.live .vs-time { color: #dc2626; }
 
+/* Tappable team (flag + name) → opens the team-stats pop-up */
+.match-row .team-stat {
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px 2px;
+  position: relative;
+  transition: background .15s, transform .1s;
+}
+.match-row .team-stat:hover { background: rgba(16, 185, 129, .08); }
+.match-row .team-stat:active { transform: scale(.97); }
+.match-row .team-stat::after {
+  content: "📊";
+  position: absolute;
+  top: -3px; right: -1px;
+  font-size: .58rem;
+  opacity: .5;
+}
+[data-theme="dark"] .match-row .team-stat:hover { background: rgba(16, 185, 129, .16); }
+
+/* Explicit place-bet button on each open fixture */
+.bet-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, .3);
+  transition: filter .15s, transform .1s;
+}
+.bet-btn:hover { filter: brightness(1.06); }
+.bet-btn:active { transform: scale(.985); }
+
 @media (max-width: 480px) {
   .match-row .team .flag { font-size: 2em; }
   .match-row .team .team-bilingual .team-en { font-size: 0.85em; }

@@ -578,16 +578,17 @@ function renderMatches(matches) {
           ${isClosed ? '' : `<span class="text-right">odds: ${m.odds?.home ?? '-'} / ${m.odds?.draw ?? '-'} / ${m.odds?.away ?? '-'}</span>`}
         </div>
         <div class="match-row">
-          <div class="team">
+          <div class="team${m.homeTeam && m.homeTeam !== 'TBD' ? ' team-stat' : ''}"${m.homeTeam && m.homeTeam !== 'TBD' ? ` data-team="${escAttr(m.homeTeam)}"` : ''}>
             <span class="flag">${m.homeFlag || '🏳️'}</span>
             ${formatTeam(m.homeTeam, m.homeSlot)}
           </div>
           ${scoreHtml}
-          <div class="team">
+          <div class="team${m.awayTeam && m.awayTeam !== 'TBD' ? ' team-stat' : ''}"${m.awayTeam && m.awayTeam !== 'TBD' ? ` data-team="${escAttr(m.awayTeam)}"` : ''}>
             <span class="flag">${m.awayFlag || '🏳️'}</span>
             ${formatTeam(m.awayTeam, m.awaySlot)}
           </div>
         </div>
+        ${isClosed ? '' : `<button class="bet-btn" data-bet-match="${m.id}">💰 落注 Place Bet</button>`}
         ${liveCards(m)}
         ${liveStats(m)}
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
@@ -624,6 +625,24 @@ function renderMatches(matches) {
         e.stopPropagation();
         editBetById(chip.dataset.editBet, chip.dataset.editMatch);
       });
+    });
+    // Tap a team's flag/name → team-stats pop-up (reuses the champion stats modal).
+    card.querySelectorAll('.team-stat[data-team]').forEach(t => {
+      t.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openChampionModal(t.dataset.team, _championLocked());
+      });
+    });
+    // Explicit 落注 button → open the bet modal (same TBD guard as the card tap).
+    const betBtn = card.querySelector('.bet-btn[data-bet-match]');
+    if (betBtn) betBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = matchesCache.get(betBtn.dataset.betMatch);
+      if (m && (m.homeTeam === 'TBD' || m.awayTeam === 'TBD')) {
+        toast('Teams TBD — bets open once admin sets the matchup.');
+        return;
+      }
+      openBetModal(betBtn.dataset.betMatch);
     });
   });
 }
@@ -1705,6 +1724,15 @@ function championCutoffMs() {
     if (Number.isFinite(t) && t < earliest) earliest = t;
   }
   return earliest;
+}
+
+// Is the champion-prediction window closed? (same rule as renderChampion's `locked`.)
+// Used by the Matches page flag-tap → team-stats modal so its pick button shows
+// the right locked/unlocked state.
+function _championLocked() {
+  const settled = championConfig && championConfig.championSettled;
+  const cutoff = championCutoffMs();
+  return settled || (Number.isFinite(cutoff) && Date.now() >= cutoff);
 }
 
 // Team → flag map, derived from the loaded fixtures.
