@@ -20,7 +20,9 @@ import json
 import math
 import re
 import sys
+import time
 import unicodedata
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -96,6 +98,163 @@ def _send_telegram(text: str) -> None:
         urllib.request.urlopen(req, timeout=20)
     except Exception:
         pass
+
+
+def _yt_id(link: str) -> str | None:
+    if not link:
+        return None
+    m = (re.search(r"[?&]v=([\w-]{11})", link)
+         or re.search(r"youtu\.be/([\w-]{11})", link)
+         or re.search(r"/shorts/([\w-]{11})", link)
+         or re.search(r"/embed/([\w-]{11})", link))
+    return m.group(1) if m else None
+
+
+# Title-side name variants so we can confirm BOTH teams appear in a video title
+# (FIFA titles use some names differently from our fixtures, e.g. Korea Republic).
+# Keyed by our _norm(team); values are extra spellings to accept.
+TEAM_TITLE_ALIASES = {
+    "south korea": ["korea republic", "korea"],
+    "dr congo": ["congo dr", "congo", "democratic republic of congo"],
+    "united states": ["usa", "united states of america"],
+    "turkiye": ["turkey"],
+    "cote d'ivoire": ["ivory coast", "cote divoire"],
+    "cabo verde": ["cape verde"],
+    "czechia": ["czech republic"],
+    "bosnia and herzegovina": ["bosnia herzegovina", "bosnia"],
+}
+
+
+def _title_norm(s: str) -> str:
+    s = unicodedata.normalize("NFKD", (s or "").lower())
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _name_variants(team: str) -> set[str]:
+    out = {_title_norm(team)}
+    key = _norm(team)
+    # Keys are written human-readably ("united states"); match them via _norm so
+    # spacing/accents never break the lookup (was a real bug — "usa" never loaded).
+    for k, alts in TEAM_TITLE_ALIASES.items():
+        if _norm(k) == key:
+            for alt in alts:
+                out.add(_title_norm(alt))
+    return {v for v in out if v}
+
+
+def _both_teams_in_title(title: str, home: str, away: str) -> bool:
+    tn = _title_norm(title)
+    return (any(v in tn for v in _name_variants(home))
+            and any(v in tn for v in _name_variants(away)))
+
+
+def _youtube_highlights(home: str, away: str) -> str | None:
+    """Find the OFFICIAL FIFA highlights clip for a finished match via SerpAPI's
+    YouTube engine. Returns an 11-char video id, or None. A candidate is only
+    accepted if BOTH team names appear in the title — this prevents grabbing a
+    same-tournament clip that merely shares one team (e.g. Canada-Bosnia wrongly
+    matching the Switzerland-Bosnia video). Better to show no button than the wrong
+    match. One SerpAPI search per call — the caller quota-guards how often it runs."""
+    key = _env("SERPAPI_API_KEY")
+    if not key:
+        return None
+    q = f"{home} vs {away} Highlights FIFA World Cup 2026"
+    url = "https://serpapi.com/search.json?" + urllib.parse.urlencode(
+        {"engine": "youtube", "search_query": q, "api_key": key})
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        print(f"serpapi youtube failed: {e}", file=sys.stderr)
+        return None
+    vids = data.get("video_results", []) or []
+
+    def _is_fifa(v):
+        # EXACT match — the official channel is named "FIFA". Imposters like
+        # "Sports FIFA World" contain the substring and must NOT count as official.
+        return ((v.get("channel") or {}).get("name") or "").strip().lower() == "fifa"
+
+    def _ok(v):
+        return _both_teams_in_title(v.get("title", ""), home, away)
+
+    # 1) FIFA channel, both teams in title, 'highlight' in title — the canonical clip
+    for v in vids[:15]:
+        t = v.get("title", "").lower()
+        if _is_fifa(v) and "highlight" in t and _ok(v):
+            if (vid := _yt_id(v.get("link"))):
+                return vid
+    # 2) FIFA channel, both teams in title (any FIFA clip of THIS match)
+    for v in vids[:15]:
+        if _is_fifa(v) and _ok(v):
+            if (vid := _yt_id(v.get("link"))):
+                return vid
+    # 3) any channel, both teams + 'highlight' in title (last resort, still verified)
+    for v in vids[:10]:
+        if "highlight" in v.get("title", "").lower() and _ok(v):
+            if (vid := _yt_id(v.get("link"))):
+                return vid
+    return None
+
+
+# Highlights pass tuning — keep SerpAPI usage (250/mo free, shared) frugal.
+HL_MAX_ATTEMPTS = 5            # give up after N misses (FIFA never posted / not found)
+HL_RETRY_SECS = 3600          # at most one search/hour per match
+HL_MIN_AGE_SECS = 90 * 60     # wait ~90 min after kickoff for FIFA to upload
+HL_PER_TICK = 2               # cap searches per run
+
+
+def _highlights_pass(db) -> int:
+    """Populate match.highlightsVideoId for settled matches with the post-match
+    FIFA YouTube highlights. Idempotent + quota-frugal: skips matches already done /
+    too fresh / over the attempt cap, throttles retries to hourly, caps searches per
+    tick. Safe to run every cron tick."""
+    from firebase_admin import firestore
+    now = time.time()
+    searches = found = 0
+    try:
+        docs = list(db.collection("matches").where("status", "==", "settled").stream())
+    except Exception as e:  # noqa: BLE001
+        print(f"highlights query failed: {e}", file=sys.stderr)
+        return 0
+    for doc in docs:
+        if searches >= HL_PER_TICK:
+            break
+        m = doc.to_dict()
+        if m.get("highlightsVideoId") or not m.get("finalScore"):
+            continue
+        if (m.get("highlightsAttempts", 0) or 0) >= HL_MAX_ATTEMPTS:
+            continue
+        try:  # let FIFA post it first
+            ko = datetime.fromisoformat((m.get("kickoffISO", "") or "").replace("Z", "+00:00"))
+            if (now - ko.timestamp()) < HL_MIN_AGE_SECS:
+                continue
+        except ValueError:
+            pass
+        if now - (m.get("highlightsLastTry", 0) or 0) < HL_RETRY_SECS:
+            continue
+        home, away = m.get("homeTeam", ""), m.get("awayTeam", "")
+        if DRY:
+            print(f"WOULD search highlights: {home} v {away}")
+            searches += 1
+            continue
+        vid = _youtube_highlights(home, away)
+        searches += 1
+        if vid:
+            doc.reference.update({
+                "highlightsVideoId": vid,
+                "highlightsUrl": f"https://www.youtube.com/watch?v={vid}",
+                "highlightsTs": now,
+            })
+            found += 1
+            print(f"🎬 highlights {home} v {away}: {vid}")
+        else:
+            doc.reference.update({
+                "highlightsAttempts": firestore.Increment(1),
+                "highlightsLastTry": now,
+            })
+    if searches:
+        print(f"highlights pass: {searches} search(es), {found} found")
+    return found
 
 
 def _fetch_wc() -> dict:
@@ -452,6 +611,16 @@ def main():
         _lillyrose_autobet(db)
     except Exception as e:  # noqa: BLE001
         print(f"lillyrose autobet skipped: {e}", file=sys.stderr)
+
+    # Post-match FIFA highlights (YouTube). Runs BEFORE the pending-match early
+    # return below, because a just-finished match is 'settled' = not pending, so it
+    # would otherwise never be reached. Self-throttles SerpAPI usage.
+    try:
+        _highlights_pass(db)
+    except Exception as e:  # noqa: BLE001
+        print(f"highlights pass skipped: {e}", file=sys.stderr)
+    if "--highlights-only" in sys.argv:
+        return
 
     # Self-gate: only hit the football-data API if at least one of OUR matches
     # has kicked off (last ~4h) and isn't settled yet. Keeps the 5-min cron cheap

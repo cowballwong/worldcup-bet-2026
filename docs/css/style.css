@@ -96,6 +96,40 @@ img.emoji {
 .bet-btn:hover { filter: brightness(1.06); }
 .bet-btn:active { transform: scale(.985); }
 
+/* 🎬 Highlights button — distinct from the green bet button (settled matches) */
+.hl-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1e293b, #475569);
+  color: #fff;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(30, 41, 59, .3);
+  transition: filter .15s, transform .1s;
+}
+.hl-btn:hover { filter: brightness(1.12); }
+.hl-btn:active { transform: scale(.985); }
+
+/* Responsive 16:9 wrapper so the embedded clip never overflows the modal */
+.hl-frame-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.hl-frame-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 @media (max-width: 480px) {
   .match-row .team .flag { font-size: 2em; }
   .match-row .team .team-bilingual .team-en { font-size: 0.85em; }

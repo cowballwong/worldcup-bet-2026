@@ -589,6 +589,7 @@ function renderMatches(matches) {
           </div>
         </div>
         ${isClosed ? '' : `<button class="bet-btn" data-bet-match="${m.id}">💰 落注 Place Bet</button>`}
+        ${m.status === 'settled' && m.highlightsVideoId ? `<button class="hl-btn" data-hl-video="${escAttr(m.highlightsVideoId)}" data-hl-title="${escAttr(`${m.homeFlag || ''} ${teamLabel(m.homeTeam)} vs ${teamLabel(m.awayTeam)} ${m.awayFlag || ''}`)}">🎬 精華 Highlights</button>` : ''}
         ${liveCards(m)}
         ${liveStats(m)}
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
@@ -644,8 +645,34 @@ function renderMatches(matches) {
       }
       openBetModal(betBtn.dataset.betMatch);
     });
+    // 🎬 Highlights button → popup with the embedded FIFA YouTube clip.
+    const hlBtn = card.querySelector('.hl-btn[data-hl-video]');
+    if (hlBtn) hlBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openHighlightsModal(hlBtn.dataset.hlVideo, hlBtn.dataset.hlTitle);
+    });
   });
 }
+
+// ── Highlights modal ───────────────────────────────────────────────
+function openHighlightsModal(videoId, title) {
+  if (!videoId) return;
+  const modal = $('hl-modal');
+  $('hl-modal-title').textContent = title || 'Match Highlights';
+  // youtube-nocookie + autoplay; rel=0 keeps suggestions to the same channel.
+  $('hl-frame').src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
+  $('hl-open-yt').href = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+function closeHighlightsModal() {
+  const modal = $('hl-modal');
+  $('hl-frame').src = '';   // stop playback
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+$('hl-modal-close')?.addEventListener('click', closeHighlightsModal);
+$('hl-modal')?.addEventListener('click', e => { if (e.target === $('hl-modal')) closeHighlightsModal(); });
 
 // "You bet on this" remark for a match card — shows the user's own bets so the
 // Matches list makes it obvious which games you've already backed.
