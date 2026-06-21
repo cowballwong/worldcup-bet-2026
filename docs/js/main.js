@@ -589,7 +589,7 @@ function renderMatches(matches) {
           </div>
         </div>
         ${isClosed ? '' : `<button class="bet-btn" data-bet-match="${m.id}">💰 落注 Place Bet</button>`}
-        ${m.status === 'settled' && m.highlightsVideoId ? `<button class="hl-btn" data-hl-video="${escAttr(m.highlightsVideoId)}" data-hl-title="${escAttr(`${m.homeFlag || ''} ${teamLabel(m.homeTeam)} vs ${teamLabel(m.awayTeam)} ${m.awayFlag || ''}`)}">🎬 精華 Highlights</button>` : ''}
+        ${m.status === 'settled' && m.highlightsVideoId ? `<button class="hl-btn" data-hl-video="${escAttr(m.highlightsVideoId)}" data-hl-title="${escAttr(`${m.homeFlag || ''} ${m.homeTeam} vs ${m.awayTeam} ${m.awayFlag || ''}`)}">🎬 精華 Highlights</button>` : ''}
         ${liveCards(m)}
         ${liveStats(m)}
         ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
@@ -658,16 +658,19 @@ function renderMatches(matches) {
 function openHighlightsModal(videoId, title) {
   if (!videoId) return;
   const modal = $('hl-modal');
+  const url = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
   $('hl-modal-title').textContent = title || 'Match Highlights';
-  // youtube-nocookie + autoplay; rel=0 keeps suggestions to the same channel.
-  $('hl-frame').src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
-  $('hl-open-yt').href = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+  // FIFA blocks iframe embedding, so show the thumbnail and open YouTube on tap
+  // (the YouTube app on mobile) — a reliable one-tap watch.
+  $('hl-thumb').src = `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+  $('hl-thumb-link').href = url;
+  $('hl-open-yt').href = url;
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
 function closeHighlightsModal() {
   const modal = $('hl-modal');
-  $('hl-frame').src = '';   // stop playback
+  $('hl-thumb').src = '';
   modal.classList.add('hidden');
   modal.classList.remove('flex');
 }

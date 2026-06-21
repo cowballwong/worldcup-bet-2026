@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260621a">
+<link rel="stylesheet" href="css/style.css?v=20260621b">
 <script>
   // Apply persisted theme before first paint to avoid FOUC
   (function() {
@@ -155,11 +155,15 @@
       <h3 id="hl-modal-title" class="font-semibold text-sm truncate">🎬 精華 Highlights</h3>
       <button id="hl-modal-close" class="text-slate-400 hover:text-slate-700 text-xl px-1 shrink-0">×</button>
     </header>
-    <div class="hl-frame-wrap">
-      <iframe id="hl-frame" src="" title="Match highlights" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
-    </div>
-    <div class="px-5 py-2 text-right">
-      <a id="hl-open-yt" href="#" target="_blank" rel="noopener" class="text-xs text-emerald-700 hover:underline">YouTube 開新分頁 ↗</a>
+    <!-- FIFA blocks iframe embedding of its official clips, so we show the
+         thumbnail and open the video in YouTube (the app on mobile) on tap. -->
+    <a id="hl-thumb-link" href="#" target="_blank" rel="noopener" class="hl-thumb-wrap">
+      <img id="hl-thumb" src="" alt="Highlights thumbnail">
+      <span class="hl-play">▶</span>
+    </a>
+    <div class="px-5 py-3 flex items-center justify-between gap-2">
+      <span class="text-xs text-slate-500">撳一下喺 YouTube 睇全片 🎬</span>
+      <a id="hl-open-yt" href="#" target="_blank" rel="noopener" class="text-xs font-semibold text-emerald-700 hover:underline">▶ YouTube 開片 ↗</a>
     </div>
   </div>
 </div>
@@ -215,6 +219,6 @@
   <a id="admin-link" href="admin.html" class="text-emerald-700 hidden">Admin</a>
 </footer>
 
-<script type="module" src="js/main.js?v=20260621a"></script>
+<script type="module" src="js/main.js?v=20260621b"></script>
 </body>
 </html>
