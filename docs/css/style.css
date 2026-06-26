@@ -354,6 +354,19 @@ img.emoji {
   color: #15803d;
   font-weight: 700;
 }
+.qual-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #047857;
+  background: #d1fae5;
+  border-radius: 6px;
+  padding: 1px 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+[data-theme="dark"] .qual-badge { color: #6ee7b7; background: #065f46; }
 .standings-table col.col-rank   { width: 32px; }
 .standings-table col.col-team   { width: auto;  }
 .standings-table col.col-stat   { width: 36px; }

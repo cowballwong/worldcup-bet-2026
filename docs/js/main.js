@@ -1517,6 +1517,77 @@ function renderMyBets(bets) {
   });
 }
 
+// ── Qualification + knockout-slot resolution ──────────────────
+// WC2026: 12 groups (A–L) of 4. Top 2 of each group (24) + the 8 best
+// third-placed teams (of 12) = 32 → Round of 32. All computed client-side
+// from settled group results, so the standings 出綫 marks and the bracket
+// auto-fill stay live as results settle (no DB writes, no betting impact).
+function computeGroupStandings() {
+  const ms = Array.from(matchesCache.values()).filter(m => m.stage === 'group' && m.group);
+  const groups = {};
+  for (const m of ms) {
+    const g = groups[m.group] || (groups[m.group] = { matches: [], teams: new Map() });
+    g.matches.push(m);
+    if (m.homeTeam && m.homeTeam !== 'TBD') g.teams.set(m.homeTeam, m.homeFlag);
+    if (m.awayTeam && m.awayTeam !== 'TBD') g.teams.set(m.awayTeam, m.awayFlag);
+  }
+  const out = {};
+  for (const [letter, g] of Object.entries(groups)) {
+    const rows = new Map();
+    for (const [name, flag] of g.teams) rows.set(name, { team: name, flag, MP:0,W:0,D:0,L:0,GF:0,GA:0,GD:0,Pts:0 });
+    let settled = 0;
+    for (const m of g.matches) {
+      if (!m.finalScore || m.status !== 'settled') continue;
+      settled++;
+      const h = rows.get(m.homeTeam), a = rows.get(m.awayTeam);
+      if (!h || !a) continue;
+      const hg = m.finalScore.home, ag = m.finalScore.away;
+      h.MP++; a.MP++; h.GF += hg; h.GA += ag; a.GF += ag; a.GA += hg;
+      if (hg > ag) { h.W++; h.Pts += 3; a.L++; }
+      else if (hg < ag) { a.W++; a.Pts += 3; h.L++; }
+      else { h.D++; a.D++; h.Pts++; a.Pts++; }
+    }
+    for (const r of rows.values()) r.GD = r.GF - r.GA;
+    const sorted = [...rows.values()].sort((x, y) =>
+      y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.team.localeCompare(y.team));
+    out[letter] = { rows: sorted, complete: g.matches.length > 0 && settled === g.matches.length };
+  }
+  return out;
+}
+
+// team -> {code:'Q1'|'Q2'|'Q3', group}. Q3 = one of the 8 best third-placed.
+function computeQualification(standings) {
+  standings = standings || computeGroupStandings();
+  const status = new Map();
+  const thirds = [];
+  for (const [letter, g] of Object.entries(standings)) {
+    if (g.rows[0]) status.set(g.rows[0].team, { code: 'Q1', group: letter });
+    if (g.rows[1]) status.set(g.rows[1].team, { code: 'Q2', group: letter });
+    if (g.rows[2]) thirds.push({ ...g.rows[2], group: letter });
+  }
+  thirds.sort((x, y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.team.localeCompare(y.team));
+  const letters = Object.keys(standings);
+  const allComplete = letters.length >= 12 && Object.values(standings).every(g => g.complete);
+  thirds.slice(0, 8).forEach(t => status.set(t.team, { code: 'Q3', group: t.group }));
+  return { status, thirds, allComplete };
+}
+
+// Resolve a knockout slot string → {team, flag} once decidable, else null
+// (null keeps the slot placeholder, so we never show a wrong matchup).
+//   "1A" = winner of Group A · "2C" = runner-up of Group C
+//   "3A/D/E/F" = a best third-placed team — needs FIFA's official 12-group
+//   combination table to place exactly, so we leave it as a placeholder.
+function resolveSlotTeam(slot, standings) {
+  if (!slot) return null;
+  const mm = /^([12])([A-L])$/.exec(String(slot).trim());
+  if (!mm) return null;  // 3rd-place slots deferred (need official assignment table)
+  standings = standings || computeGroupStandings();
+  const g = standings[mm[2]];
+  if (!g || !g.complete) return null;       // only fill when that group is fully decided
+  const row = g.rows[Number(mm[1]) - 1];
+  return row ? { team: row.team, flag: row.flag } : null;
+}
+
 // ── Bracket tab ────────────────────────────────────────────────
 // Tree-style: 6 columns (R32 → R16 → QF → SF → 3rd → Final).
 // Each column flex-grows; matches inside a column are evenly spaced so the
@@ -1560,16 +1631,21 @@ function bracketMatchHtml(m, isFinal) {
   const finalCls = isFinal ? 'is-final' : '';
   const hs = m.finalScore ? m.finalScore.home : '';
   const as_ = m.finalScore ? m.finalScore.away : '';
+  // Auto-fill knockout slots (1A / 2C …) from settled group standings.
+  const rh = (m.homeTeam && m.homeTeam !== 'TBD') ? { team: m.homeTeam, flag: m.homeFlag } : resolveSlotTeam(m.homeSlot);
+  const ra = (m.awayTeam && m.awayTeam !== 'TBD') ? { team: m.awayTeam, flag: m.awayFlag } : resolveSlotTeam(m.awaySlot);
+  const homeCell = rh ? `${rh.flag || ''} ${rh.team}` : shortTeamLabel(m.homeTeam, m.homeSlot);
+  const awayCell = ra ? `${ra.flag || ''} ${ra.team}` : shortTeamLabel(m.awayTeam, m.awaySlot);
   return `
     <div class="bracket-match ${settledCls} ${finalCls}">
       <div class="bm-date">${dateLabel}</div>
       <div class="bm-team">
-        <span class="bm-name">${m.homeFlag || ''} ${shortTeamLabel(m.homeTeam, m.homeSlot)}</span>
+        <span class="bm-name">${homeCell}</span>
         <span class="bm-score">${hs}</span>
       </div>
       <div class="bm-divider"></div>
       <div class="bm-team">
-        <span class="bm-name">${m.awayFlag || ''} ${shortTeamLabel(m.awayTeam, m.awaySlot)}</span>
+        <span class="bm-name">${awayCell}</span>
         <span class="bm-score">${as_}</span>
       </div>
     </div>
@@ -1605,6 +1681,8 @@ function renderStandings() {
   }
 
   const groupLetters = Object.keys(groups).sort();
+  const _standings = computeGroupStandings();
+  const _qual = computeQualification(_standings);
   const groupHtmlMap = {};
   groupLetters.forEach(letter => {
     const { matches, teams } = groups[letter];
@@ -1630,10 +1708,18 @@ function renderStandings() {
     const sorted = [...rows.values()].sort((x, y) =>
       y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.team.localeCompare(y.team));
 
-    const rowsHtml = sorted.map((r, i) => `
-      <tr class="${i < 2 ? 'qualified-row' : ''}">
+    const grpComplete = !!(_standings[letter] && _standings[letter].complete);
+    const rowsHtml = sorted.map((r, i) => {
+      const q = _qual.status.get(r.team);
+      const thirdQual = i === 2 && q && q.code === 'Q3' && _qual.allComplete;
+      const qualified = i < 2 || thirdQual;
+      let badge = '';
+      if (i < 2 && grpComplete) badge = '<span class="qual-badge">✓ 出綫</span>';
+      else if (thirdQual) badge = '<span class="qual-badge">✓ 出綫 · 最佳3rd</span>';
+      return `
+      <tr class="${qualified ? 'qualified-row' : ''}">
         <td class="px-1 py-1 text-center">${i + 1}</td>
-        <td class="px-2 py-1 whitespace-nowrap">${r.flag || ''} ${teamLabel(r.team)}</td>
+        <td class="px-2 py-1 whitespace-nowrap">${r.flag || ''} ${teamLabel(r.team)}${badge}</td>
         <td class="px-1 py-1 text-center">${r.MP}</td>
         <td class="px-1 py-1 text-center">${r.W}</td>
         <td class="px-1 py-1 text-center">${r.D}</td>
@@ -1643,7 +1729,8 @@ function renderStandings() {
         <td class="px-1 py-1 text-center">${r.GD > 0 ? '+' + r.GD : r.GD}</td>
         <td class="px-1 py-1 text-center font-semibold">${r.Pts}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
     groupHtmlMap[letter] = `
       <div class="standings-group">
         <h3 class="font-semibold mt-1 mb-2">Group ${letter}</h3>
