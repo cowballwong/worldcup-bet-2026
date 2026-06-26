@@ -42,6 +42,15 @@ if sys.stdout is None or sys.stderr is None:
         sys.stdout = sys.stdout or io.StringIO()
         sys.stderr = sys.stderr or io.StringIO()
 
+# Force UTF-8 on the streams so emoji prints (🎬, ✅) never crash the run under a
+# Windows cp1252 console (manual runs). The scheduler's utf-8 logfile is already
+# fine; StringIO/file fallbacks may lack .reconfigure → guard each call.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001
+        pass
+
 SECRETS = Path(r"G:/My Drive/AI_Development/07_secrets")
 ENV = SECRETS / ".env"
 SA_JSON = SECRETS / "worldcup-bet-firebase-admin.json"
@@ -148,6 +157,33 @@ def _both_teams_in_title(title: str, home: str, away: str) -> bool:
             and any(v in tn for v in _name_variants(away)))
 
 
+# FIFA's official channel posts far more than match highlights: training, 3D
+# animations, "Every Angle", press conferences, arrivals, previews, etc. These
+# all carry both team names in the title, so the both-teams check alone lets them
+# through (tier 2 especially, which doesn't even require 'highlight'). Reject any
+# title carrying a non-highlight marker — a real highlights clip never does.
+BAD_HL_TITLE = re.compile(
+    r"\b(training|warm[\s-]?up|3\s?d|animation|animated|press\s*conf\w*|presser|"
+    r"mic'?d?\s*up|arrival|every\s*angle|behind\s+the\s+scenes|preview|predict\w*|"
+    r"reaction|watch[\s-]?along|interview|fan\s*zone|all\s*goals\s*&?\s*saves\s*compilation)\b",
+    re.IGNORECASE)
+
+
+def _is_bad_highlight(title: str) -> bool:
+    return bool(BAD_HL_TITLE.search(title or ""))
+
+
+def _valid_highlight_title(title: str, home: str, away: str) -> bool:
+    """A title is a real match-highlights clip only if it (a) literally says
+    'highlight' — every genuine FIFA/3rd-party highlights upload does, while
+    training/preview/interview/press clips don't — AND (b) names both teams AND
+    (c) carries no non-highlight marker (3D, Every Angle, etc.). Single source of
+    truth shared by the live picker and the reset cleanup."""
+    return ("highlight" in (title or "").lower()
+            and _both_teams_in_title(title, home, away)
+            and not _is_bad_highlight(title))
+
+
 def _youtube_highlights(home: str, away: str) -> str | None:
     """Find the OFFICIAL FIFA highlights clip for a finished match via SerpAPI's
     YouTube engine. Returns an 11-char video id, or None. A candidate is only
@@ -175,7 +211,8 @@ def _youtube_highlights(home: str, away: str) -> str | None:
         return ((v.get("channel") or {}).get("name") or "").strip().lower() == "fifa"
 
     def _ok(v):
-        return _both_teams_in_title(v.get("title", ""), home, away)
+        # must literally be a highlights clip of THIS match (not training/3D/press)
+        return _valid_highlight_title(v.get("title", ""), home, away)
 
     # 1) FIFA channel, both teams in title, 'highlight' in title — the canonical clip
     for v in vids[:15]:
@@ -596,6 +633,171 @@ def evaluate(market: str, selection: str, fs: dict, ht: dict | None):
     return "void"
 
 
+# ── Knockout auto-advance ──────────────────────────────────────
+# Resolve knockout slot placeholders to real teams once decidable, and write
+# them into the match docs so the bracket, the matches list AND betting all use
+# real teams. Mirrors the client logic in docs/js/main.js. Idempotent: only fills
+# a slot that's still TBD and now resolvable; steady-state = zero writes.
+#   "1A"/"2C"  → group winner / runner-up (once that group is complete)
+#   "3A/D/E/F" → a best third-placed team (once all 12 groups complete; assigned
+#                to the 8 R32 third-slots by constraint-matching the published
+#                candidate groups — a same-group-clash-free valid assignment)
+#   "W R32-1" / "L SF-1" → winner / loser of that knockout match (once settled)
+_KO_REF_RE = re.compile(r'^([WL])\s+(R32|R16|QF|SF)-(\d+)$', re.IGNORECASE)
+_GRP_RE = re.compile(r'^([12])([A-L])$')
+
+
+def _ko_group_standings(matches):
+    groups = {}
+    for m in matches:
+        if (m.get("stage") or "") != "group" or not m.get("group"):
+            continue
+        g = groups.setdefault(m["group"], {"matches": [], "teams": {}})
+        g["matches"].append(m)
+        for side in ("home", "away"):
+            t = m.get(side + "Team")
+            if t and t != "TBD":
+                g["teams"][t] = m.get(side + "Flag", "")
+    out = {}
+    for letter, g in groups.items():
+        rows = {t: {"team": t, "flag": f, "MP": 0, "W": 0, "D": 0, "L": 0,
+                    "GF": 0, "GA": 0, "GD": 0, "Pts": 0} for t, f in g["teams"].items()}
+        settled = 0
+        for m in g["matches"]:
+            fs = m.get("finalScore")
+            if not fs or m.get("status") != "settled":
+                continue
+            settled += 1
+            h, a = rows.get(m.get("homeTeam")), rows.get(m.get("awayTeam"))
+            if not h or not a:
+                continue
+            hg, ag = fs.get("home"), fs.get("away")
+            if hg is None or ag is None:
+                continue
+            h["MP"] += 1; a["MP"] += 1
+            h["GF"] += hg; h["GA"] += ag; a["GF"] += ag; a["GA"] += hg
+            if hg > ag:   h["W"] += 1; h["Pts"] += 3; a["L"] += 1
+            elif hg < ag: a["W"] += 1; a["Pts"] += 3; h["L"] += 1
+            else:         h["D"] += 1; a["D"] += 1; h["Pts"] += 1; a["Pts"] += 1
+        for r in rows.values():
+            r["GD"] = r["GF"] - r["GA"]
+        srt = sorted(rows.values(), key=lambda r: (-r["Pts"], -r["GD"], -r["GF"], r["team"]))
+        out[letter] = {"rows": srt, "complete": len(g["matches"]) > 0 and settled == len(g["matches"])}
+    return out
+
+
+def _thirds_assignment(standings, third_slots):
+    """Map each '3A/D/E/F'-style slot → a team. Only once all 12 groups complete."""
+    letters = list(standings.keys())
+    if len(letters) < 12 or not all(standings[l]["complete"] for l in letters):
+        return {}
+    thirds = []
+    for l, g in standings.items():
+        if len(g["rows"]) >= 3:
+            t = dict(g["rows"][2]); t["group"] = l; thirds.append(t)
+    thirds.sort(key=lambda r: (-r["Pts"], -r["GD"], -r["GF"], r["team"]))
+    qgroups = {t["group"]: t for t in thirds[:8]}     # the 8 best thirds, by group
+    slots = [(s, [c for c in s[1:].split("/") if c in qgroups]) for s in third_slots]
+    order = sorted(range(len(slots)), key=lambda i: len(slots[i][1]))  # hardest first
+    assign, used = {}, set()
+
+    def bt(k):
+        if k == len(order):
+            return True
+        s, cands = slots[order[k]]
+        for c in cands:
+            if c in used:
+                continue
+            used.add(c); assign[s] = c
+            if bt(k + 1):
+                return True
+            used.discard(c); assign.pop(s, None)
+        return False
+
+    if not bt(0):
+        return {}
+    return {s: qgroups[c]["team"] for s, c in assign.items()}
+
+
+def _advance_knockout(db, all_matches):
+    """Fill resolvable knockout slots with real teams. Idempotent. Returns #updated."""
+    matches = {mid: m for mid, m in all_matches}
+    flag = {}
+    for m in matches.values():
+        for side in ("home", "away"):
+            t = m.get(side + "Team")
+            if t and t != "TBD":
+                flag[t] = m.get(side + "Flag", "")
+    standings = _ko_group_standings(matches.values())
+    third_slots = sorted({sl for m in matches.values() if m.get("stage") == "r32"
+                          for sl in (m.get("homeSlot"), m.get("awaySlot"))
+                          if sl and sl.startswith("3")})
+    assignment = _thirds_assignment(standings, third_slots)
+
+    def ref_to_id(rd, n):
+        return f"WC26-R32-{int(n):02d}" if rd.upper() == "R32" else f"WC26-{rd.upper()}-{int(n)}"
+
+    def ko_result(ref_id):
+        m = matches.get(ref_id)
+        if not m or m.get("status") != "settled":
+            return (None, None)
+        fs = m.get("finalScore") or {}
+        h, a = m.get("homeTeam"), m.get("awayTeam")
+        hg, ag = fs.get("home"), fs.get("away")
+        if not h or not a or h == "TBD" or a == "TBD" or hg is None or ag is None:
+            return (None, None)
+        if hg > ag: return (h, a)
+        if ag > hg: return (a, h)
+        pw = fs.get("penWinner") or m.get("penWinner") or m.get("penaltyWinner")
+        if pw in ("home", h): return (h, a)
+        if pw in ("away", a): return (a, h)
+        return (None, None)  # drawn, no penalty winner recorded yet
+
+    def resolve(slot):
+        if not slot:
+            return None
+        slot = slot.strip()
+        mm = _GRP_RE.match(slot)
+        if mm:
+            g = standings.get(mm.group(2))
+            if g and g["complete"]:
+                idx = int(mm.group(1)) - 1
+                if idx < len(g["rows"]):
+                    return g["rows"][idx]["team"]
+            return None
+        if slot.startswith("3"):
+            return assignment.get(slot)
+        mm = _KO_REF_RE.match(slot)
+        if mm:
+            w, l = ko_result(ref_to_id(mm.group(2), mm.group(3)))
+            return w if mm.group(1).upper() == "W" else l
+        return None
+
+    filled = 0
+    for mid, m in matches.items():
+        if (m.get("stage") or "") == "group":
+            continue
+        upd = {}
+        for side in ("home", "away"):
+            if m.get(side + "Team") and m.get(side + "Team") != "TBD":
+                continue  # already a real team
+            team = resolve(m.get(side + "Slot"))
+            if team:
+                upd[side + "Team"] = team
+                upd[side + "Flag"] = flag.get(team, "")
+        if upd:
+            if DRY:
+                print(f"WOULD advance {mid}: {upd}")
+            else:
+                from firebase_admin import firestore
+                upd["updatedAt"] = firestore.SERVER_TIMESTAMP
+                db.collection("matches").document(mid).update(upd)
+            filled += 1
+    if filled:
+        print(f"knockout advance: filled {filled} match(es)")
+    return filled
+
+
 def main():
     if not SA_JSON.exists():
         print("Missing Firebase service-account JSON", file=sys.stderr); sys.exit(1)
@@ -626,6 +828,16 @@ def main():
     # has kicked off (last ~4h) and isn't settled yet. Keeps the 5-min cron cheap
     # on idle ticks + respects the free-tier API quota.
     all_matches = [(d.id, d.to_dict()) for d in db.collection("matches").stream()]
+
+    # Auto-advance the knockout bracket: fill resolvable slots (group winners/
+    # runners-up, best thirds, and W/L of settled knockout matches) with real
+    # teams. Runs every tick BEFORE the idle early-return so it still fills when
+    # no match is live (e.g. the morning after the group stage ends). Idempotent.
+    try:
+        _advance_knockout(db, all_matches)
+    except Exception as e:  # noqa: BLE001
+        print(f"knockout advance skipped: {e}", file=sys.stderr)
+
     def _pending(m):
         if m.get("status") == "settled":
             return False
