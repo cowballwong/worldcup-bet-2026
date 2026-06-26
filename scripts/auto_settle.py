@@ -829,14 +829,12 @@ def main():
     # on idle ticks + respects the free-tier API quota.
     all_matches = [(d.id, d.to_dict()) for d in db.collection("matches").stream()]
 
-    # Auto-advance the knockout bracket: fill resolvable slots (group winners/
-    # runners-up, best thirds, and W/L of settled knockout matches) with real
-    # teams. Runs every tick BEFORE the idle early-return so it still fills when
-    # no match is live (e.g. the morning after the group stage ends). Idempotent.
-    try:
-        _advance_knockout(db, all_matches)
-    except Exception as e:  # noqa: BLE001
-        print(f"knockout advance skipped: {e}", file=sys.stderr)
+    # Knockout bracket fill is now driven by OFFICIAL data via rebuild_knockout.py
+    # (scheduled task \LillyRose\WorldCupKnockoutSync), which pulls ESPN's real
+    # fixtures/teams/dates and resolves slots the official way (incl. the best-8
+    # thirds assignment). The old standings-based _advance_knockout() guessed the
+    # thirds and could disagree with the official bracket, so its call is removed.
+    # (_advance_knockout + helpers kept in the file as a self-contained fallback.)
 
     def _pending(m):
         if m.get("status") == "settled":
