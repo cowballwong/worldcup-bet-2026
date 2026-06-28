@@ -1605,35 +1605,107 @@ const R32_BRACKET_ORDER = [
 ];
 const _r32pos = id => { const i = R32_BRACKET_ORDER.indexOf(id); return i < 0 ? 99 : i; };
 
+// RADIAL bracket: 32 teams on the outer ring, lines converging inward through
+// R16 → QF → SF → Final, trophy in the centre. Outer ring uses R32_BRACKET_ORDER
+// (right half + mirrored left half, clockwise from top). Inner rings auto-fill
+// with the winner of each tie as matches settle (resolved by team-match lookup,
+// so it never depends on fragile per-round doc ordering). Best-effort + guarded.
 function renderBracket() {
   const root = $('bracket-list');
   if (!root) return;
-  const ms = Array.from(matchesCache.values());
-  const cols = [
-    { code: 'r32',       label: 'Round of 32 / 32強', count: 16 },
-    { code: 'r16',       label: 'Round of 16 / 16強', count: 8 },
-    { code: 'qf',        label: 'Quarter / 八強',     count: 4 },
-    { code: 'sf',        label: 'Semi / 四強',         count: 2 },
-    { code: '3rd-place', label: '3rd / 季軍',          count: 1 },
-    { code: 'final',     label: '🏆 Final / 決賽',     count: 1 },
-  ];
-  const colsHtml = cols.map(c => {
-    const stageMatches = ms.filter(m => m.stage === c.code)
-      .sort((a, b) => c.code === 'r32'
-        ? _r32pos(a.id) - _r32pos(b.id)
-        : a.kickoffISO.localeCompare(b.kickoffISO));
-    const items = (stageMatches.length ? stageMatches : Array.from({ length: c.count }, () => null))
-      .map(m => bracketMatchHtml(m, c.code === 'final'))
-      .join('');
-    return `
-      <div class="bracket-col">
-        <div class="bracket-col-title">${c.label}</div>
-        ${items}
-      </div>
-    `;
-  }).join('');
-  root.innerHTML = `<div class="bracket-grid">${colsHtml}</div>` ||
-    '<p class="text-slate-500 text-sm">Knockout fixtures not loaded yet.</p>';
+  const get = id => matchesCache.get(id);
+  const side = (m, which) => {
+    if (!m) return null;
+    const t = which === 'h' ? m.homeTeam : m.awayTeam;
+    const f = which === 'h' ? m.homeFlag : m.awayFlag;
+    if (t && t !== 'TBD') return { team: t, flag: f || '' };
+    const r = resolveSlotTeam(which === 'h' ? m.homeSlot : m.awaySlot);
+    return r ? { team: r.team, flag: r.flag || '' } : null;
+  };
+  const winnerOf = m => {
+    if (!m || m.status !== 'settled' || !m.finalScore) return null;
+    const h = m.finalScore.home, a = m.finalScore.away;
+    if (h > a) return side(m, 'h');
+    if (a > h) return side(m, 'a');
+    const pw = m.finalScore.penWinner || m.penWinner;
+    if (pw) return pw === m.homeTeam ? side(m, 'h') : side(m, 'a');
+    return null;
+  };
+  const winnerBetween = (stage, A, B) => {
+    if (!A || !B) return null;
+    for (const m of matchesCache.values()) {
+      if (m.stage !== stage) continue;
+      const names = [m.homeTeam, m.awayTeam];
+      if (names.includes(A.team) && names.includes(B.team)) return winnerOf(m);
+    }
+    return null;
+  };
+
+  // outer 32 in circle order (clockwise from top): right half, then left mirrored
+  const LEFT = R32_BRACKET_ORDER.slice(0, 8);
+  const RIGHT = R32_BRACKET_ORDER.slice(8, 16);
+  const circleIds = RIGHT.concat(LEFT.slice().reverse());
+  const outer = [];
+  circleIds.forEach((id, k) => {
+    const m = get(id);
+    const h = side(m, 'h'), a = side(m, 'a');
+    if (k < 8) { outer.push(h, a); } else { outer.push(a, h); }
+  });
+
+  // winner rings (guarded so a data hiccup can never break the render)
+  let ring1 = [], ring2 = [], ring3 = [], ring4 = [], champ = null;
+  try {
+    ring1 = circleIds.map(id => winnerOf(get(id)));
+    for (let r = 0; r < 8; r++) ring2.push(winnerBetween('r16', ring1[2 * r], ring1[2 * r + 1]));
+    for (let p = 0; p < 4; p++) ring3.push(winnerBetween('qf', ring2[2 * p], ring2[2 * p + 1]));
+    for (let f = 0; f < 2; f++) ring4.push(winnerBetween('sf', ring3[2 * f], ring3[2 * f + 1]));
+    champ = winnerBetween('final', ring4[0], ring4[1]);
+  } catch (e) { /* best-effort inner rings */ }
+
+  // geometry
+  const cx = 460, cy = 480, R = [392, 312, 236, 162, 92];
+  const ang = (lvl, idx) => { const c = 32 / Math.pow(2, lvl); return (-90 + (idx + 0.5) * (360 / c)) * Math.PI / 180; };
+  const pos = (lvl, idx) => { const a = ang(lvl, idx); return [cx + R[lvl] * Math.cos(a), cy + R[lvl] * Math.sin(a)]; };
+  let s = '';
+  for (let L = 0; L < 5; L++) {
+    const c = 32 / Math.pow(2, L);
+    for (let i = 0; i < c; i++) {
+      const [x1, y1] = pos(L, i);
+      let x2, y2;
+      if (L < 4) { [x2, y2] = pos(L + 1, i >> 1); } else { x2 = cx; y2 = cy; }
+      s += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#4a4a55" stroke-width="1.1"/>`;
+    }
+  }
+  [ring1, ring2, ring3, ring4].forEach((ring, li) => {
+    const L = li + 1;
+    ring.forEach((node, i) => {
+      const [x, y] = pos(L, i);
+      if (node && node.flag) {
+        s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="13" fill="#16161c" stroke="#3a3a44" stroke-width="1.2"/>`;
+        s += `<text x="${x.toFixed(1)}" y="${(y + 6).toFixed(1)}" text-anchor="middle" font-size="16">${node.flag}</text>`;
+      } else {
+        s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#33333d"/>`;
+      }
+    });
+  });
+  s += `<circle cx="${cx}" cy="${cy}" r="46" fill="url(#wcg)"/>`;
+  if (champ && champ.flag) {
+    s += `<text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="30">${champ.flag}</text>`;
+    s += `<text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="20">🏆</text>`;
+  } else {
+    s += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="46">🏆</text>`;
+  }
+  for (let i = 0; i < 32; i++) {
+    const [x, y] = pos(0, i);
+    const node = outer[i];
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="20" fill="#16161c" stroke="#2c2c36" stroke-width="1.5"/>`;
+    s += `<text x="${x.toFixed(1)}" y="${(y + 9).toFixed(1)}" text-anchor="middle" font-size="24">${node ? (node.flag || '') : ''}</text>`;
+    const a = ang(0, i), lr = R[0] + 28, lx = cx + lr * Math.cos(a), ly = cy + lr * Math.sin(a);
+    const anchor = Math.cos(a) > 0.15 ? 'start' : (Math.cos(a) < -0.15 ? 'end' : 'middle');
+    s += `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" fill="#cfcfd6">${node ? escHtml(node.team) : 'TBD'}</text>`;
+  }
+  const defs = `<defs><radialGradient id="wcg"><stop offset="0%" stop-color="#5a4410"/><stop offset="100%" stop-color="#0b0b0f"/></radialGradient></defs>`;
+  root.innerHTML = `<div class="radial-bracket"><svg viewBox="-90 0 1100 960" preserveAspectRatio="xMidYMid meet">${defs}${s}</svg></div>`;
 }
 
 function bracketMatchHtml(m, isFinal) {
