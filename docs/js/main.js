@@ -1593,6 +1593,18 @@ function resolveSlotTeam(slot, standings) {
 // Tree-style: 6 columns (R32 → R16 → QF → SF → 3rd → Final).
 // Each column flex-grows; matches inside a column are evenly spaced so the
 // later rounds visually line up with the centre of their feeder pair.
+// Canonical bracket order for the R32 column so the tree 走線 line up like a
+// standard bracket (left half 8 + right half 8, adjacent pairs feed one R16).
+// Sorting knockout by kickoff DATE scrambles the tree — this restores it.
+// Match doc ids are stable (WC26-R32-NN). Verified against the official bracket.
+const R32_BRACKET_ORDER = [
+  'WC26-R32-03', 'WC26-R32-06', 'WC26-R32-01', 'WC26-R32-04', // left top  → R16 A,B
+  'WC26-R32-12', 'WC26-R32-11', 'WC26-R32-10', 'WC26-R32-09', // left bot  → R16 C,D
+  'WC26-R32-02', 'WC26-R32-05', 'WC26-R32-07', 'WC26-R32-08', // right top → R16 E,F
+  'WC26-R32-15', 'WC26-R32-14', 'WC26-R32-13', 'WC26-R32-16', // right bot → R16 G,H
+];
+const _r32pos = id => { const i = R32_BRACKET_ORDER.indexOf(id); return i < 0 ? 99 : i; };
+
 function renderBracket() {
   const root = $('bracket-list');
   if (!root) return;
@@ -1607,7 +1619,9 @@ function renderBracket() {
   ];
   const colsHtml = cols.map(c => {
     const stageMatches = ms.filter(m => m.stage === c.code)
-      .sort((a, b) => a.kickoffISO.localeCompare(b.kickoffISO));
+      .sort((a, b) => c.code === 'r32'
+        ? _r32pos(a.id) - _r32pos(b.id)
+        : a.kickoffISO.localeCompare(b.kickoffISO));
     const items = (stageMatches.length ? stageMatches : Array.from({ length: c.count }, () => null))
       .map(m => bracketMatchHtml(m, c.code === 'final'))
       .join('');
