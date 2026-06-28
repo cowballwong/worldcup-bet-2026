@@ -592,7 +592,8 @@ function renderMatches(matches) {
         ${m.status === 'settled' && m.highlightsVideoId ? `<button class="hl-btn" data-hl-video="${escAttr(m.highlightsVideoId)}" data-hl-title="${escAttr(`${m.homeFlag || ''} ${m.homeTeam} vs ${m.awayTeam} ${m.awayFlag || ''}`)}">🎬 精華 Highlights</button>` : ''}
         ${liveCards(m)}
         ${liveStats(m)}
-        ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${(m.venue && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
+        ${(m.venue || m.broadcaster) ? `<div class="text-[11px] text-slate-400 mt-2 text-center">${m.venue || ''}${m.venueCity ? `, ${m.venueCity}` : ''}${((m.venue || m.venueCity) && m.broadcaster) ? ' · ' : ''}${m.broadcaster ? `📺 ${m.broadcaster}` : ''}</div>` : ''}
+        ${(m.homeOrigin || m.awayOrigin || m.fifaRankHome || m.fifaRankAway) ? `<div class="text-[11px] text-slate-500 mt-1 flex items-center justify-center gap-2 flex-wrap"><span>${m.homeOrigin || ''}${m.fifaRankHome ? `<span class="text-slate-400"> · FIFA #${m.fifaRankHome}</span>` : ''}</span><span class="text-slate-600">⚔️</span><span>${m.awayOrigin || ''}${m.fifaRankAway ? `<span class="text-slate-400"> · FIFA #${m.fifaRankAway}</span>` : ''}</span></div>` : ''}
         ${myBetRemark(m.id)}
         ${matchPredictions(m.id)}
       </div>

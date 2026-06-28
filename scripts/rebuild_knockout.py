@@ -59,6 +59,7 @@ ALIASES = {  # ESPN name -> our canonical normalized key (only where they differ
     "ivorycoast": "cotedivoire", "korearepublic": "southkorea", "korea": "southkorea",
     "iran": "iran", "usa": "unitedstates", "us": "unitedstates",
     "bosniaherzegovina": "bosniaandherzegovina", "turkiye": "turkiye", "turkey": "turkiye",
+    "congodr": "drcongo", "drcongo": "drcongo", "capeverde": "caboverde", "caboverde": "caboverde",
 }
 
 def espn(dates):
