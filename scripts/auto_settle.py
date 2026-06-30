@@ -598,6 +598,81 @@ def _espn_halftime(event_id) -> dict | None:
         return None
 
 
+def _to_int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _espn_periods(event_id) -> dict | None:
+    """Period-by-period scores from ESPN summary linescores + shootoutScore.
+    Returns {'reg':{home,away}|None (= first 2 periods = 90 min), 'full':{home,away}|None
+    (sum of all periods = after extra time), 'periods':N, 'pens':{home,away}|None}.
+    Used to settle bets on the 90-MINUTE score while still capturing the ET/penalty
+    result for the bracket + display."""
+    if not event_id:
+        return None
+    data = _espn_get(f"summary?event={event_id}")
+    if not data:
+        return None
+    comp = ((data.get("header") or {}).get("competitions") or [{}])[0]
+    sides = {c.get("homeAway"): c for c in comp.get("competitors", []) or []}
+    if "home" not in sides or "away" not in sides:
+        return None
+
+    def _ls(side):
+        return [x for x in (_to_int(p.get("displayValue"))
+                            for p in (sides[side].get("linescores") or [])) if x is not None]
+    lh, la = _ls("home"), _ls("away")
+    out = {"periods": max(len(lh), len(la)), "reg": None, "full": None, "pens": None}
+    if len(lh) >= 2 and len(la) >= 2:
+        out["reg"] = {"home": lh[0] + lh[1], "away": la[0] + la[1]}
+    if lh and la:
+        out["full"] = {"home": sum(lh), "away": sum(la)}
+    ph, pa = _to_int(sides["home"].get("shootoutScore")), _to_int(sides["away"].get("shootoutScore"))
+    if ph is not None and pa is not None:
+        out["pens"] = {"home": ph, "away": pa}
+    return out
+
+
+def _decider(lv: dict | None, api: dict | None, final_score: dict,
+             home: str, away: str, is_ko: bool):
+    """Split a finished match into (reg_score_90min, ko_info|None).
+      reg_score = the 90-minute result → what user BETS settle on (Anzon's rule).
+      ko_info   = {decidedBy, winner, penScore?, etScore?} for the bracket + display,
+                  only for knockout matches decided in ET or on penalties.
+    final_score here is the source's DISPLAYED final (already includes ET goals)."""
+    reg = dict(final_score)
+    pens = None
+    if lv and lv.get("event_id"):
+        per = _espn_periods(lv["event_id"])
+        if per:
+            if per.get("reg"):
+                reg = per["reg"]
+            if per.get("pens"):
+                pens = per["pens"]
+    if api:                                   # API-Football / football-data sub-scores
+        sc = api.get("score") or {}
+        ft = sc.get("fulltime") or sc.get("regularTime")     # af 'fulltime'=90' · fd 'regularTime'
+        pn = sc.get("penalty") or sc.get("penalties")
+        if isinstance(ft, dict) and ft.get("home") is not None:
+            reg = {"home": int(ft["home"]), "away": int(ft["away"])}
+        if isinstance(pn, dict) and pn.get("home") is not None:
+            pens = {"home": int(pn["home"]), "away": int(pn["away"])}
+    if not is_ko:
+        return reg, None
+    et = {"home": final_score["home"], "away": final_score["away"]}   # after-ET (displayed)
+    if pens:
+        w = home if pens["home"] > pens["away"] else (away if pens["away"] > pens["home"] else None)
+        return reg, {"decidedBy": "penalties", "winner": w, "penScore": pens, "etScore": et}
+    if et["home"] != reg["home"] or et["away"] != reg["away"]:        # goals in ET → decided in ET
+        w = home if et["home"] > et["away"] else (away if et["away"] > et["home"] else None)
+        if w:
+            return reg, {"decidedBy": "extra_time", "winner": w, "etScore": et}
+    return reg, None
+
+
 # ── settlement rules — must mirror docs/js/markets.js ───────────────────────
 def evaluate(market: str, selection: str, fs: dict, ht: dict | None):
     h, a = fs["home"], fs["away"]
@@ -965,7 +1040,26 @@ def main():
         if final_score is None:
             continue  # not finished on either source yet — settle on a later tick
 
+        # Bets settle on the 90-MINUTE result only (Anzon's rule). For knockout we
+        # ALSO capture the ET / penalty decider so the bracket gets a winner and the
+        # card can display it — without changing what users are scored on.
+        is_ko = (m.get("stage") or "") not in ("", "group")
+        bet_score, ko = _decider(lv, api, final_score, home, away, is_ko)
+        final_score = {"home": bet_score["home"], "away": bet_score["away"]}
+        if ko:
+            final_score["decidedBy"] = ko["decidedBy"]
+            final_score["winner"] = ko["winner"]        # team name → bracket winnerOf()
+            final_score["penWinner"] = ko["winner"]     # back-compat alias
+            if ko.get("penScore"):
+                final_score["penScore"] = ko["penScore"]
+            if ko.get("etScore"):
+                final_score["etScore"] = ko["etScore"]
+
         line = f"{home} {final_score['home']}-{final_score['away']} {away}"
+        if ko:
+            _t = (f"12碼 {ko['penScore']['home']}-{ko['penScore']['away']}" if ko.get("penScore")
+                  else f"加時 {ko['etScore']['home']}-{ko['etScore']['away']}")
+            line += f" [{_t} · {ko['winner']} 晉級]"
         if DRY:
             print(f"WOULD settle: {mid}  {line}  (HT {half_score})")
             settled_count += 1
@@ -1042,7 +1136,7 @@ def main():
         if (m.get("stage") or "").lower() == "final":
             champ = (home if final_score["home"] > final_score["away"]
                      else away if final_score["away"] > final_score["home"]
-                     else _pen_winner(api, home, away))
+                     else (ko or {}).get("winner") or _pen_winner(api, home, away))
             if champ:
                 _settle_champion(db, champ)
 

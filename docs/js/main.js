@@ -555,7 +555,13 @@ function renderMatches(matches) {
     // Score area: final > live > pre-match "vs"
     let scoreHtml;
     if (m.finalScore) {
-      scoreHtml = `<div class="vs"><span>${m.finalScore.home} - ${m.finalScore.away}</span><span class="vs-time">FT</span></div>`;
+      // Score shown = the 90-minute result (what bets settle on). For a knockout
+      // decided later, tag it: AET, or "Pens X-Y". Bracket winner via winnerOf().
+      const fs = m.finalScore;
+      let tag = 'FT';
+      if (fs.decidedBy === 'penalties' && fs.penScore) tag = `Pens ${fs.penScore.home}-${fs.penScore.away}`;
+      else if (fs.decidedBy === 'extra_time') tag = 'AET';
+      scoreHtml = `<div class="vs"><span>${fs.home} - ${fs.away}</span><span class="vs-time">${tag}</span></div>`;
     } else if (m.status === 'live' && m.liveScore) {
       // Live clock ticks locally between the ~5-min API syncs: base minute from
       // the API + real minutes elapsed since it was written (re-syncs each update).
@@ -1627,7 +1633,8 @@ function renderBracket() {
     const h = m.finalScore.home, a = m.finalScore.away;
     if (h > a) return side(m, 'h');
     if (a > h) return side(m, 'a');
-    const pw = m.finalScore.penWinner || m.penWinner;
+    // 90-min draw → knockout decided in ET / on penalties. winner = the team name.
+    const pw = m.finalScore.winner || m.finalScore.penWinner || m.penWinner;
     if (pw) return pw === m.homeTeam ? side(m, 'h') : side(m, 'a');
     return null;
   };
