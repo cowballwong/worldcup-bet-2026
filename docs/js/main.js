@@ -965,8 +965,16 @@ async function placeBet() {
     }
     await runTransaction(db, async (tx) => {
       const userRef = doc(db, 'users', currentUser.uid);
+      // Deterministic id = one bet per (user, match, market). A second bet on the
+      // same market collides on this id → structurally impossible to duplicate,
+      // even across devices / races that the client-side cache check can miss.
+      const betRef = doc(db, 'bets', `${currentUser.uid}__${activeMatch.id}__${activeMarket}`);
       const uSnap = await tx.get(userRef);
+      const bSnap = await tx.get(betRef);   // ALL reads before any write (Firestore rule)
       if (!uSnap.exists()) throw new Error('User doc missing.');
+      if (bSnap.exists() && bSnap.data().status === 'open') {
+        throw new Error('你已經喺呢場嘅呢個市場落咗注喇。想改注請去 My Bets 撳 ✏️。');
+      }
       const newBal = uSnap.data().balance - stake;
       if (newBal < 0) throw new Error('Insufficient balance.');
       // Move stake from cash → locked openStake (asset value stays the same).
@@ -975,7 +983,6 @@ async function placeBet() {
         openStake: (uSnap.data().openStake || 0) + stake,
       });
 
-      const betRef = doc(collection(db, 'bets'));
       tx.set(betRef, {
         userId: currentUser.uid,
         userEmail: currentUser.email,
