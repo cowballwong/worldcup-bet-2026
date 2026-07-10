@@ -89,8 +89,15 @@ service cloud.firestore {
     // Update / delete: admins only (e.g. settlement, void).
     match /bets/{betId} {
       // AI-LillyRose bets are visible to everyone (it's a public AI player).
+      // `resource == null` MUST come first: the place-bet transaction does a
+      // tx.get() on the deterministic bet id (uid__match__market) to block
+      // duplicates. On a FIRST bet that doc doesn't exist yet — without this
+      // guard the get() is denied ("Missing or insufficient permissions") and
+      // EVERY first-time bet on a match/market fails. Reading a non-existent
+      // doc leaks nothing.
       allow read: if isSignedIn() && (
-                    resource.data.userId == request.auth.uid
+                    resource == null
+                    || resource.data.userId == request.auth.uid
                     || resource.data.userId == 'lillyrose-ai'
                     || isAdmin()
                   );
@@ -133,6 +140,51 @@ service cloud.firestore {
                                 && request.resource.data.pick is string)
                             || isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // ── teach_bookings ────────────────────────────────────────
+    // PUBLIC lesson-booking inbox for the AI Teaching booking page
+    // (teaching-booking GitHub Pages). The page is UNAUTHENTICATED, so create
+    // must be allowed with auth==null — but every booking carries a student's
+    // name + email, so client READ is FORBIDDEN (no leaderboard, no listing).
+    // LillyRose drains this collection server-side via the Firebase Admin SDK
+    // (service account) which BYPASSES these rules; the public can only drop a
+    // booking in, never read what's there. Validated + size-capped to limit abuse.
+    match /teach_bookings/{id} {
+      allow read, update, delete: if false;          // never readable client-side
+      allow create: if request.resource.data.email is string
+                    && request.resource.data.email.size() <= 120
+                    && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+                    && request.resource.data.slot_date is string
+                    && request.resource.data.slot_uk is string
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.kind in ['new', 'existing']
+                    && (!('note' in request.resource.data)
+                        || request.resource.data.note.size() <= 500)
+                    // new students must give a name; existing are resolved by email
+                    && (request.resource.data.kind == 'existing'
+                        || (request.resource.data.name is string
+                            && request.resource.data.name.size() > 0
+                            && request.resource.data.name.size() <= 80));
+    }
+
+    // ── arcade_scores ─────────────────────────────────────────
+    // PUBLIC leaderboard for the game-arcade (kids' HTML5 games, GitHub Pages).
+    // Unauthenticated: anyone can READ the top scores, and anyone can CREATE a
+    // score entry (name + score), validated + size-capped. Entries are immutable
+    // (no update/delete) so the board can't be tampered with. Migrated off the
+    // old Google Apps Script + Sheet backend 2026-07-05.
+    match /arcade_scores/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 12
+                    && request.resource.data.score is int
+                    && request.resource.data.score >= 0
+                    && request.resource.data.score < 100000000
+                    && request.resource.data.game is string
+                    && request.resource.data.game.size() <= 40;
+      allow update, delete: if false;
     }
   }
 }
