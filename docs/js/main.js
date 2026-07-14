@@ -1683,8 +1683,8 @@ function renderBracket() {
   const FS  = [15, 18, 22, 26, 30];   // flag font-size per level L0..L4
   // Winner ("advanced") lines get brighter the deeper the round — so the teams
   // still alive furthest in (e.g. today: Spain / England / Argentina) glow most.
-  const GW  = [1.4, 1.8, 2.3, 2.8, 3.2];    // advanced-line width per level
-  const GO  = [0.38, 0.52, 0.70, 0.88, 1.0]; // advanced-line brightness (opacity) per level
+  const GW  = [1.5, 2.1, 2.9, 3.6, 4.0];    // advanced-line width per level
+  const GO  = [0.42, 0.6, 0.85, 1.0, 1.0];  // advanced-line brightness (opacity) per level
   const ang = (lvl, idx) => { const c = 32 / Math.pow(2, lvl); return (-90 + (idx + 0.5) * (360 / c)) * Math.PI / 180; };
   const pos = (lvl, idx) => { const a = ang(lvl, idx); return [cx + R[lvl] * Math.cos(a), cy + R[lvl] * Math.sin(a)]; };
   const rings = [outer, ring1, ring2, ring3, ring4];
@@ -1737,7 +1737,7 @@ function renderBracket() {
     const anchor = Math.cos(a) > 0.15 ? 'start' : (Math.cos(a) < -0.15 ? 'end' : 'middle');
     s += `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" fill="#cfcfd6">${node ? escHtml(node.team) : 'TBD'}</text>`;
   }
-  const defs = `<defs><radialGradient id="wcg"><stop offset="0%" stop-color="#5a4410"/><stop offset="100%" stop-color="#0b0b0f"/></radialGradient><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  const defs = `<defs><radialGradient id="wcg"><stop offset="0%" stop-color="#5a4410"/><stop offset="100%" stop-color="#0b0b0f"/></radialGradient><filter id="glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="3.1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   root.innerHTML = `<div class="radial-bracket"><svg viewBox="-90 0 1100 960" preserveAspectRatio="xMidYMid meet">${defs}${s}</svg></div>`;
 }
 
