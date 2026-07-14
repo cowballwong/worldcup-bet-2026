@@ -1681,6 +1681,10 @@ function renderBracket() {
   // Flags grow one level at a time from the outer ring (R32) inward to the champion.
   const RAD = [13, 15, 18, 21, 24];   // node circle radius per level L0..L4
   const FS  = [15, 18, 22, 26, 30];   // flag font-size per level L0..L4
+  // Winner ("advanced") lines get brighter the deeper the round — so the teams
+  // still alive furthest in (e.g. today: Spain / England / Argentina) glow most.
+  const GW  = [1.4, 1.8, 2.3, 2.8, 3.2];    // advanced-line width per level
+  const GO  = [0.38, 0.52, 0.70, 0.88, 1.0]; // advanced-line brightness (opacity) per level
   const ang = (lvl, idx) => { const c = 32 / Math.pow(2, lvl); return (-90 + (idx + 0.5) * (360 / c)) * Math.PI / 180; };
   const pos = (lvl, idx) => { const a = ang(lvl, idx); return [cx + R[lvl] * Math.cos(a), cy + R[lvl] * Math.sin(a)]; };
   const rings = [outer, ring1, ring2, ring3, ring4];
@@ -1696,8 +1700,8 @@ function renderBracket() {
       let x2, y2;
       if (L < 4) { [x2, y2] = pos(L + 1, i >> 1); } else { x2 = cx; y2 = cy; }
       s += advanced(L, i)
-        ? `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#f5c451" stroke-width="2.6" stroke-linecap="round" filter="url(#glow)"/>`
-        : `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#26262d" stroke-width="0.8" opacity="0.65"/>`;
+        ? `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#f5c451" stroke-width="${GW[L]}" opacity="${GO[L]}" stroke-linecap="round" filter="url(#glow)"/>`
+        : `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#26262d" stroke-width="0.8" opacity="0.55"/>`;
     }
   }
   // inner winner rings (L1..L4) — size grows inward; a still-advancing team gets a gold glowing ring
