@@ -1701,7 +1701,7 @@ function renderBracket() {
       if (L < 4) { [x2, y2] = pos(L + 1, i >> 1); } else { x2 = cx; y2 = cy; }
       s += advanced(L, i)
         ? `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#f5c451" stroke-width="${GW[L]}" opacity="${GO[L]}" stroke-linecap="round" filter="url(#glow)"/>`
-        : `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#26262d" stroke-width="0.8" opacity="0.55"/>`;
+        : `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#3c3c47" stroke-width="1"/>`;
     }
   }
   // inner winner rings (L1..L4) — size grows inward; a still-advancing team gets a gold glowing ring
