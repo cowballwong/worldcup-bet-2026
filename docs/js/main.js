@@ -1678,25 +1678,37 @@ function renderBracket() {
 
   // geometry
   const cx = 460, cy = 480, R = [392, 312, 236, 162, 92];
+  // Flags grow one level at a time from the outer ring (R32) inward to the champion.
+  const RAD = [13, 15, 18, 21, 24];   // node circle radius per level L0..L4
+  const FS  = [15, 18, 22, 26, 30];   // flag font-size per level L0..L4
   const ang = (lvl, idx) => { const c = 32 / Math.pow(2, lvl); return (-90 + (idx + 0.5) * (360 / c)) * Math.PI / 180; };
   const pos = (lvl, idx) => { const a = ang(lvl, idx); return [cx + R[lvl] * Math.cos(a), cy + R[lvl] * Math.sin(a)]; };
+  const rings = [outer, ring1, ring2, ring3, ring4];
+  const nodeAt = (L, i) => (L < 5 ? (rings[L] ? rings[L][i] : null) : champ);
+  // A team "advanced" along an edge when the winner filling the next slot is the same team.
+  const advanced = (L, i) => { const ch = nodeAt(L, i); const pa = (L < 4) ? nodeAt(L + 1, i >> 1) : champ; return !!(ch && pa && ch.team && ch.team === pa.team); };
   let s = '';
+  // connector lines — light up (glow gold) the ones a team actually advanced along
   for (let L = 0; L < 5; L++) {
     const c = 32 / Math.pow(2, L);
     for (let i = 0; i < c; i++) {
       const [x1, y1] = pos(L, i);
       let x2, y2;
       if (L < 4) { [x2, y2] = pos(L + 1, i >> 1); } else { x2 = cx; y2 = cy; }
-      s += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#4a4a55" stroke-width="1.1"/>`;
+      s += advanced(L, i)
+        ? `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#f5c451" stroke-width="2.6" stroke-linecap="round" filter="url(#glow)"/>`
+        : `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#4a4a55" stroke-width="1.1"/>`;
     }
   }
+  // inner winner rings (L1..L4) — size grows inward; a still-advancing team gets a gold glowing ring
   [ring1, ring2, ring3, ring4].forEach((ring, li) => {
     const L = li + 1;
     ring.forEach((node, i) => {
       const [x, y] = pos(L, i);
       if (node && node.flag) {
-        s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="13" fill="#16161c" stroke="#3a3a44" stroke-width="1.2"/>`;
-        s += `<text x="${x.toFixed(1)}" y="${(y + 6).toFixed(1)}" text-anchor="middle" font-size="16">${node.flag}</text>`;
+        const adv = advanced(L, i);
+        s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${RAD[L]}" fill="#16161c" stroke="${adv ? '#f5c451' : '#3a3a44'}" stroke-width="${adv ? 2 : 1.2}"${adv ? ' filter="url(#glow)"' : ''}/>`;
+        s += `<text x="${x.toFixed(1)}" y="${(y + FS[L] * 0.38).toFixed(1)}" text-anchor="middle" font-size="${FS[L]}">${node.flag}</text>`;
       } else {
         s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#33333d"/>`;
       }
@@ -1704,21 +1716,24 @@ function renderBracket() {
   });
   s += `<circle cx="${cx}" cy="${cy}" r="46" fill="url(#wcg)"/>`;
   if (champ && champ.flag) {
-    s += `<text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="30">${champ.flag}</text>`;
-    s += `<text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="20">🏆</text>`;
+    s += `<circle cx="${cx}" cy="${cy}" r="46" fill="none" stroke="#f5c451" stroke-width="2.4" filter="url(#glow)"/>`;
+    s += `<text x="${cx}" y="${(cy - 4).toFixed(1)}" text-anchor="middle" font-size="40">${champ.flag}</text>`;
+    s += `<text x="${cx}" y="${(cy + 26).toFixed(1)}" text-anchor="middle" font-size="20">🏆</text>`;
   } else {
     s += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="46">🏆</text>`;
   }
+  // outer ring (32 teams) — smallest flags + team labels
   for (let i = 0; i < 32; i++) {
     const [x, y] = pos(0, i);
     const node = outer[i];
-    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="20" fill="#16161c" stroke="#2c2c36" stroke-width="1.5"/>`;
-    s += `<text x="${x.toFixed(1)}" y="${(y + 9).toFixed(1)}" text-anchor="middle" font-size="24">${node ? (node.flag || '') : ''}</text>`;
+    const adv = advanced(0, i);
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${RAD[0]}" fill="#16161c" stroke="${adv ? '#f5c451' : '#2c2c36'}" stroke-width="${adv ? 2 : 1.5}"${adv ? ' filter="url(#glow)"' : ''}/>`;
+    s += `<text x="${x.toFixed(1)}" y="${(y + FS[0] * 0.38).toFixed(1)}" text-anchor="middle" font-size="${FS[0]}">${node ? (node.flag || '') : ''}</text>`;
     const a = ang(0, i), lr = R[0] + 28, lx = cx + lr * Math.cos(a), ly = cy + lr * Math.sin(a);
     const anchor = Math.cos(a) > 0.15 ? 'start' : (Math.cos(a) < -0.15 ? 'end' : 'middle');
     s += `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" fill="#cfcfd6">${node ? escHtml(node.team) : 'TBD'}</text>`;
   }
-  const defs = `<defs><radialGradient id="wcg"><stop offset="0%" stop-color="#5a4410"/><stop offset="100%" stop-color="#0b0b0f"/></radialGradient></defs>`;
+  const defs = `<defs><radialGradient id="wcg"><stop offset="0%" stop-color="#5a4410"/><stop offset="100%" stop-color="#0b0b0f"/></radialGradient><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   root.innerHTML = `<div class="radial-bracket"><svg viewBox="-90 0 1100 960" preserveAspectRatio="xMidYMid meet">${defs}${s}</svg></div>`;
 }
 
