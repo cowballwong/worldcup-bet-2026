@@ -50,10 +50,15 @@
      the standings, bets and bracket are still one scroll away. -->
 <section id="ended-cover" class="max-w-4xl mx-auto px-4 pt-5">
   <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-700 to-emerald-900 text-white shadow-lg px-5 py-6 sm:px-8 sm:py-8 text-center">
-    <div class="text-5xl sm:text-6xl mb-2">🏆</div>
+    <!-- the site swaps emoji for inline images, which left-aligns a bare
+         emoji div and wraps the champions line — so centre them explicitly -->
+    <div class="text-5xl sm:text-6xl mb-2 flex justify-center">🏆</div>
     <h2 class="text-xl sm:text-2xl font-bold leading-snug">世界盃 2026 已經完滿結束</h2>
     <p class="text-emerald-100 text-sm sm:text-base mt-1">World Cup 2026 — that's a wrap</p>
-    <p class="mt-4 text-lg sm:text-xl font-semibold">冠軍 · Champions &nbsp;🇪🇸&nbsp; 西班牙 Spain</p>
+    <p class="mt-4 text-sm text-emerald-200 tracking-wide">冠軍 · CHAMPIONS</p>
+    <p class="mt-1 text-lg sm:text-xl font-semibold flex items-center justify-center gap-2 whitespace-nowrap">
+      <span>🇪🇸</span><span>西班牙 Spain</span>
+    </p>
     <div class="mt-5 text-sm sm:text-base text-emerald-50/95 leading-relaxed">
       <p>估波遊戲已經收咗，唔再開新注。</p>
       <p>所有注單、排行榜、賽果同淘汰賽表<strong>全部保留</strong>，隨時撳落去睇返。</p>
