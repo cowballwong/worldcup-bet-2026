@@ -40,10 +40,11 @@ service cloud.firestore {
     // - Update: only admins (to adjust balances) or the server-side
     //   settlement path. Players CANNOT edit their own balance directly.
     match /users/{uid} {
-      // PUBLIC read: friends game with no sensitive data (just displayName +
-      // balance). Lets the LillyRose dashboard server-side fetch the
-      // leaderboard via Firestore REST without auth tokens.
-      allow read: if true;
+      // Signed-in read only (privacy fix 2026-10-09): every doc carries the
+      // player's email, so it must not be world-readable. The game reads the
+      // leaderboard only after Google sign-in; the LillyRose dashboard and the
+      // settlement scripts use the service account (Admin, bypasses rules).
+      allow read: if isSignedIn();
       // Self-create on first sign-in (starting balance only), OR admin seeding
       // a user doc (e.g. the LillyRose AI player, whose uid != admin's uid).
       allow create: if (isSelf(uid)
@@ -142,30 +143,66 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ── teach_bookings ────────────────────────────────────────
-    // PUBLIC lesson-booking inbox for the AI Teaching booking page
-    // (teaching-booking GitHub Pages). The page is UNAUTHENTICATED, so create
-    // must be allowed with auth==null — but every booking carries a student's
-    // name + email, so client READ is FORBIDDEN (no leaderboard, no listing).
-    // LillyRose drains this collection server-side via the Firebase Admin SDK
-    // (service account) which BYPASSES these rules; the public can only drop a
-    // booking in, never read what's there. Validated + size-capped to limit abuse.
+    // ── teach_* (AI Teaching enrolment v2, deployed 2026-10-09) ──────────
+    // The public pages never READ bookings, requests or verify docs. The only
+    // client read is `get` of ONE record whose id is the student's private
+    // 128-bit token, which only arrives in that student's inbox. `list` is
+    // forbidden, so the collection cannot be enumerated.
+
+    function teachEmailOk(e) {
+      return e is string && e.size() <= 120
+             && e.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+    }
+    function teachTokenOk(t) {
+      return t is string && t.matches('^[0-9a-f]{32}$');
+    }
+
+    // Bookings inbox (unchanged for new students; existing students must now
+    // carry their private token, checked again server-side by process_bookings).
     match /teach_bookings/{id} {
-      allow read, update, delete: if false;          // never readable client-side
-      allow create: if request.resource.data.email is string
-                    && request.resource.data.email.size() <= 120
-                    && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+      allow read, update, delete: if false;
+      allow create: if teachEmailOk(request.resource.data.email)
                     && request.resource.data.slot_date is string
                     && request.resource.data.slot_uk is string
                     && request.resource.data.status == 'pending'
                     && request.resource.data.kind in ['new', 'existing']
+                    && (!('course' in request.resource.data)
+                        || request.resource.data.course in ['basic', 'advanced'])
                     && (!('note' in request.resource.data)
                         || request.resource.data.note.size() <= 500)
-                    // new students must give a name; existing are resolved by email
-                    && (request.resource.data.kind == 'existing'
-                        || (request.resource.data.name is string
-                            && request.resource.data.name.size() > 0
-                            && request.resource.data.name.size() <= 80));
+                    && (request.resource.data.kind == 'new'
+                        ? (request.resource.data.name is string
+                           && request.resource.data.name.size() > 0
+                           && request.resource.data.name.size() <= 80)
+                        : teachTokenOk(request.resource.data.token));
+    }
+
+    // Per-student record, written ONLY by LillyRose (Admin SDK, bypasses rules).
+    match /teach_records/{token} {
+      allow get: if teachTokenOk(token);
+      allow list, create, update, delete: if false;
+    }
+
+    // "Email me my private link" requests from page 2. Drop-in only.
+    match /teach_verify/{id} {
+      allow read, update, delete: if false;
+      allow create: if teachEmailOk(request.resource.data.email)
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.keys().hasOnly(['email', 'status', 'created', 'lang']);
+    }
+
+    // Advanced-course exemption requests (page 3). Drop-in only.
+    match /teach_requests/{id} {
+      allow read, update, delete: if false;
+      allow create: if teachEmailOk(request.resource.data.email)
+                    && request.resource.data.type == 'exemption'
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 80
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() > 0
+                    && request.resource.data.reason.size() <= 1500;
     }
 
     // ── arcade_scores ─────────────────────────────────────────
@@ -185,6 +222,20 @@ service cloud.firestore {
                     && request.resource.data.game is string
                     && request.resource.data.game.size() <= 40;
       allow update, delete: if false;
+    }
+
+    // ── site_counters ─────────────────────────────────────────
+    // PUBLIC visit counters for static sites (hk-regs-map on GitHub Pages,
+    // added 2026-09-28). Unauthenticated: anyone can READ a count, and the only
+    // write allowed is "+1 on visits" to an EXISTING doc. No create (docs are
+    // seeded with the Admin SDK), no delete, no other fields, no jumps.
+    match /site_counters/{site} {
+      allow read: if true;
+      allow create, delete: if false;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visits'])
+                    && request.resource.data.visits is int
+                    && resource.data.visits is int
+                    && request.resource.data.visits == resource.data.visits + 1;
     }
   }
 }
